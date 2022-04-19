@@ -1,7 +1,6 @@
 package delay
 
 import (
-	"container/heap"
 	"github.com/smartwalle/queue/priority"
 	"sync"
 	"sync/atomic"
@@ -10,6 +9,7 @@ import (
 
 type Option func(opt *option)
 
+// WithCapacity 用于设定队列的初始容量
 func WithCapacity(capacity int) Option {
 	return func(opt *option) {
 		if capacity <= 0 {
@@ -19,6 +19,7 @@ func WithCapacity(capacity int) Option {
 	}
 }
 
+// WithTimeUnit 用于设定队列时间单位
 func WithTimeUnit(unit time.Duration) Option {
 	return func(opt *option) {
 		if unit <= 0 {
@@ -28,6 +29,7 @@ func WithTimeUnit(unit time.Duration) Option {
 	}
 }
 
+// WithTimeProvider 用于设定队列的时间源
 func WithTimeProvider(f func() int64) Option {
 	return func(opt *option) {
 		if f == nil {
@@ -45,7 +47,24 @@ type option struct {
 	timer    func() int64
 }
 
-type Queue struct {
+// Queue 延迟队列
+type Queue interface {
+	// Len 获取队列元素数量
+	Len() int
+
+	// Enqueue 添加元素到队列
+	// 参数 expiration 的值不能小于 0
+	Enqueue(value interface{}, expiration int64)
+
+	// Dequeue 获取队列中已过期的元素及其过期时间，并且将该元素从队列中删除
+	// 如果队列中没有过期的元素，则本方法会一直阻塞，直到有过期的元素
+	Dequeue() (interface{}, int64)
+
+	// Close 关闭延迟队列
+	Close()
+}
+
+type delayQueue struct {
 	*option
 
 	mu sync.Mutex
@@ -56,8 +75,8 @@ type Queue struct {
 	close    chan struct{}
 }
 
-func New(opts ...Option) *Queue {
-	var q = &Queue{}
+func New(opts ...Option) Queue {
+	var q = &delayQueue{}
 	q.option = &option{
 		capacity: 32,
 		unit:     time.Millisecond,
@@ -73,18 +92,20 @@ func New(opts ...Option) *Queue {
 	return q
 }
 
-func (dq *Queue) Push(x interface{}, expiration int64) {
+func (dq *delayQueue) Len() int {
+	return dq.pq.Len()
+}
+
+func (dq *delayQueue) Enqueue(value interface{}, expiration int64) {
 	select {
 	case <-dq.close:
 	default:
-		var item = &priority.Item{Value: x, Priority: expiration}
 
 		dq.mu.Lock()
-		heap.Push(&dq.pq, item)
-		index := item.Index
+		var head = dq.pq.Enqueue(value, expiration)
 		dq.mu.Unlock()
 
-		if index == 0 {
+		if head {
 			if atomic.CompareAndSwapInt32(&dq.sleeping, 1, 0) {
 				dq.wakeup <- struct{}{}
 			}
@@ -92,21 +113,23 @@ func (dq *Queue) Push(x interface{}, expiration int64) {
 	}
 }
 
-func (dq *Queue) Pop() interface{} {
-	var result interface{}
+func (dq *delayQueue) Dequeue() (interface{}, int64) {
+	var value interface{}
+	var expiration int64
+	var delay int64
 
 ReadLoop:
 	for {
 		var nTime = dq.option.timer()
 
 		dq.mu.Lock()
-		item, delay := dq.pq.PeekAndShift(nTime)
-		if item == nil {
+		value, expiration, delay = dq.pq.Peek(nTime)
+		if value == nil {
 			atomic.StoreInt32(&dq.sleeping, 1)
 		}
 		dq.mu.Unlock()
 
-		if item == nil {
+		if value == nil {
 			if delay == 0 {
 				select {
 				case <-dq.wakeup:
@@ -132,18 +155,13 @@ ReadLoop:
 			}
 		}
 
-		select {
-		case <-dq.close:
-		default:
-			result = item.Value
-		}
 		break ReadLoop
 	}
 
 	atomic.StoreInt32(&dq.sleeping, 0)
-	return result
+	return value, expiration
 }
 
-func (dq *Queue) Close() {
+func (dq *delayQueue) Close() {
 	close(dq.close)
 }
