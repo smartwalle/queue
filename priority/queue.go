@@ -20,7 +20,7 @@ type Queue interface {
 
 	// Enqueue 添加元素到队列
 	// 参数 priority 的值不能小于 0
-	// 如果新元素在队列的头部，则返回 true，否则返回 false
+	// 如果新元素在队列的头部（即为最高优先级元素），则返回 true，否则返回 false
 	Enqueue(value interface{}, priority int64) bool
 
 	// Dequeue 获取队列中的第一个元素及其优先级，并且将该元素从队列中删除
