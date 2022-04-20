@@ -77,7 +77,9 @@ func New(opts ...Option) Queue {
 		},
 	}
 	for _, opt := range opts {
-		opt(q.option)
+		if opt != nil {
+			opt(q.option)
+		}
 	}
 
 	q.pq = priority.New()
