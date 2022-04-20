@@ -101,10 +101,10 @@ func (dq *delayQueue) Enqueue(value interface{}, expiration int64) {
 	default:
 
 		dq.mu.Lock()
-		var head = dq.pq.Enqueue(value, expiration)
+		var nItem = dq.pq.Enqueue(value, expiration)
 		dq.mu.Unlock()
 
-		if head {
+		if nItem.Index() == 0 {
 			if atomic.CompareAndSwapInt32(&dq.sleeping, 1, 0) {
 				dq.wakeup <- struct{}{}
 			}

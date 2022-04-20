@@ -6,10 +6,18 @@ import (
 	"container/heap"
 )
 
-type Item struct {
+type Item interface {
+	Index() int
+}
+
+type queueItem struct {
 	value    interface{}
 	priority int64
 	index    int
+}
+
+func (item *queueItem) Index() int {
+	return item.index
 }
 
 // Queue 优先级队列
@@ -20,8 +28,7 @@ type Queue interface {
 
 	// Enqueue 添加元素到队列
 	// 参数 priority 的值不能小于 0
-	// 如果新元素在队列的头部（即为最高优先级元素），则返回 true，否则返回 false
-	Enqueue(value interface{}, priority int64) bool
+	Enqueue(value interface{}, priority int64) Item
 
 	// Dequeue 获取队列中的第一个元素及其优先级，并且将该元素从队列中删除
 	// 如果队列中没有元素，则返回 nil 和 -1
@@ -34,7 +41,7 @@ type Queue interface {
 	Peek(max int64) (interface{}, int64, int64)
 }
 
-type priorityQueue []*Item
+type priorityQueue []*queueItem
 
 func New() Queue {
 	var nQueue = make(priorityQueue, 0, 32)
@@ -64,9 +71,9 @@ func (pq *priorityQueue) Push(x interface{}) {
 		*pq = npq
 	}
 	*pq = (*pq)[0 : n+1]
-	item := x.(*Item)
-	item.index = n
-	(*pq)[n] = item
+	nItem := x.(*queueItem)
+	nItem.index = n
+	(*pq)[n] = nItem
 }
 
 func (pq *priorityQueue) Pop() interface{} {
@@ -77,27 +84,27 @@ func (pq *priorityQueue) Pop() interface{} {
 		copy(npq, *pq)
 		*pq = npq
 	}
-	item := (*pq)[n-1]
-	item.index = -1
+	var nItem = (*pq)[n-1]
+	nItem.index = -1
 	*pq = (*pq)[0 : n-1]
-	return item
+	return nItem
 }
 
-func (pq *priorityQueue) Enqueue(value interface{}, priority int64) bool {
+func (pq *priorityQueue) Enqueue(value interface{}, priority int64) Item {
 	if priority < 0 {
 		priority = 0
 	}
-	var item = &Item{value: value, priority: priority}
-	heap.Push(pq, item)
-	return item.index == 0
+	var nItem = &queueItem{value: value, priority: priority}
+	heap.Push(pq, nItem)
+	return nItem
 }
 
 func (pq *priorityQueue) Dequeue() (interface{}, int64) {
 	if pq.Len() == 0 {
 		return nil, -1
 	}
-	item := heap.Pop(pq).(*Item)
-	return item.value, item.priority
+	var nItem = heap.Pop(pq).(*queueItem)
+	return nItem.value, nItem.priority
 }
 
 func (pq *priorityQueue) Peek(max int64) (interface{}, int64, int64) {
@@ -105,11 +112,11 @@ func (pq *priorityQueue) Peek(max int64) (interface{}, int64, int64) {
 		return nil, -1, 0
 	}
 
-	item := (*pq)[0]
-	if item.priority > max {
-		return nil, item.priority, item.priority - max
+	var nItem = (*pq)[0]
+	if nItem.priority > max {
+		return nil, nItem.priority, nItem.priority - max
 	}
 	heap.Remove(pq, 0)
 
-	return item.value, item.priority, 0
+	return nItem.value, nItem.priority, 0
 }
