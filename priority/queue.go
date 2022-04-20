@@ -7,7 +7,11 @@ import (
 )
 
 type Item interface {
-	Index() int
+	IsFirst() bool
+
+	getIndex() int
+
+	updatePriority(int64)
 }
 
 type queueItem struct {
@@ -16,8 +20,16 @@ type queueItem struct {
 	index    int
 }
 
-func (item *queueItem) Index() int {
+func (item *queueItem) IsFirst() bool {
+	return item.index == 0
+}
+
+func (item *queueItem) getIndex() int {
 	return item.index
+}
+
+func (item *queueItem) updatePriority(priority int64) {
+	item.priority = priority
 }
 
 // Queue 优先级队列
@@ -39,6 +51,9 @@ type Queue interface {
 	// 如果队列中有元素，但是所有元素的优先级都大于参数 max 的值，则返回值分别是 nil，队列中第一个元素的优先级，队列中第一个元素的优先级与 max 的差值
 	// 如果队列中有元素，并且有元素的优先级小于等于参数 max 的值，则返回值分别是队列中第一个元素，队列中第一个元素的优先级，0。并且将该元素从队列中删除
 	Peek(max int64) (interface{}, int64, int64)
+
+	// Update 更新元素的优先级
+	Update(item Item, priority int64)
 }
 
 type priorityQueue []*queueItem
@@ -119,4 +134,19 @@ func (pq *priorityQueue) Peek(max int64) (interface{}, int64, int64) {
 	heap.Remove(pq, 0)
 
 	return nItem.value, nItem.priority, 0
+}
+
+func (pq *priorityQueue) Update(item Item, priority int64) {
+	if item == nil {
+		return
+	}
+
+	if priority < 0 {
+		priority = 0
+	}
+	item.updatePriority(priority)
+
+	if item.getIndex() >= 0 {
+		heap.Fix(pq, item.getIndex())
+	}
 }
