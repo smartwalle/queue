@@ -18,6 +18,9 @@ func main() {
 		for {
 			var v, p = dQueue.Dequeue()
 			fmt.Println("Dequeue", time.Now().Unix(), v, p)
+			if p == -1 {
+				break
+			}
 		}
 	}()
 
@@ -34,7 +37,8 @@ func main() {
 
 	}()
 
-	time.Sleep(time.Second * 10)
+	time.Sleep(time.Second * 5)
 
 	dQueue.Close()
+	time.Sleep(time.Second * 2)
 }

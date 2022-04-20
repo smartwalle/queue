@@ -6,7 +6,7 @@ import (
 )
 
 func BenchmarkPriorityQueue_Enqueue(b *testing.B) {
-	var q = priority.New(32)
+	var q = priority.New()
 
 	for i := 0; i < b.N; i++ {
 		q.Enqueue(i, int64(i))

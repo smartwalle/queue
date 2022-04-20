@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-	var pQueue = priority.New(32)
+	var pQueue = priority.New()
 
 	fmt.Println("1", pQueue.Enqueue("1", 1))
 	fmt.Println("2", pQueue.Enqueue("2", 0))
@@ -22,4 +22,17 @@ func main() {
 		}
 		fmt.Println("Dequeue", v, p)
 	}
+
+	//var delay = int64(0)
+	//for {
+	//	var v, p, _ = pQueue.Peek(delay)
+	//	fmt.Println("Peek", v, p)
+	//	if v == nil {
+	//		if p > 0 {
+	//			delay = p
+	//			continue
+	//		}
+	//		break
+	//	}
+	//}
 }

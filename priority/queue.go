@@ -7,9 +7,9 @@ import (
 )
 
 type Item struct {
-	Value    interface{}
-	Priority int64
-	Index    int
+	value    interface{}
+	priority int64
+	index    int
 }
 
 // Queue 优先级队列
@@ -36,8 +36,8 @@ type Queue interface {
 
 type priorityQueue []*Item
 
-func New(capacity int) Queue {
-	var nQueue = make(priorityQueue, 0, capacity)
+func New() Queue {
+	var nQueue = make(priorityQueue, 0, 32)
 	return &nQueue
 }
 
@@ -46,13 +46,13 @@ func (pq priorityQueue) Len() int {
 }
 
 func (pq priorityQueue) Less(i, j int) bool {
-	return pq[i].Priority < pq[j].Priority
+	return pq[i].priority < pq[j].priority
 }
 
 func (pq priorityQueue) Swap(i, j int) {
 	pq[i], pq[j] = pq[j], pq[i]
-	pq[i].Index = i
-	pq[j].Index = j
+	pq[i].index = i
+	pq[j].index = j
 }
 
 func (pq *priorityQueue) Push(x interface{}) {
@@ -65,20 +65,20 @@ func (pq *priorityQueue) Push(x interface{}) {
 	}
 	*pq = (*pq)[0 : n+1]
 	item := x.(*Item)
-	item.Index = n
+	item.index = n
 	(*pq)[n] = item
 }
 
 func (pq *priorityQueue) Pop() interface{} {
 	n := len(*pq)
 	c := cap(*pq)
-	if n < (c/2) && c > 25 {
+	if n < (c/2) && c > 32 {
 		npq := make(priorityQueue, n, c/2)
 		copy(npq, *pq)
 		*pq = npq
 	}
 	item := (*pq)[n-1]
-	item.Index = -1
+	item.index = -1
 	*pq = (*pq)[0 : n-1]
 	return item
 }
@@ -87,9 +87,9 @@ func (pq *priorityQueue) Enqueue(value interface{}, priority int64) bool {
 	if priority < 0 {
 		priority = 0
 	}
-	var item = &Item{Value: value, Priority: priority}
+	var item = &Item{value: value, priority: priority}
 	heap.Push(pq, item)
-	return item.Index == 0
+	return item.index == 0
 }
 
 func (pq *priorityQueue) Dequeue() (interface{}, int64) {
@@ -97,7 +97,7 @@ func (pq *priorityQueue) Dequeue() (interface{}, int64) {
 		return nil, -1
 	}
 	item := heap.Pop(pq).(*Item)
-	return item.Value, item.Priority
+	return item.value, item.priority
 }
 
 func (pq *priorityQueue) Peek(max int64) (interface{}, int64, int64) {
@@ -106,10 +106,10 @@ func (pq *priorityQueue) Peek(max int64) (interface{}, int64, int64) {
 	}
 
 	item := (*pq)[0]
-	if item.Priority > max {
-		return nil, item.Priority, item.Priority - max
+	if item.priority > max {
+		return nil, item.priority, item.priority - max
 	}
 	heap.Remove(pq, 0)
 
-	return item.Value, item.Priority, 0
+	return item.value, item.priority, 0
 }

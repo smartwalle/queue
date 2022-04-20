@@ -9,21 +9,11 @@ import (
 
 type Option func(opt *option)
 
-// WithCapacity 用于设定队列的初始容量
-func WithCapacity(capacity int) Option {
-	return func(opt *option) {
-		if capacity <= 0 {
-			capacity = 32
-		}
-		opt.capacity = capacity
-	}
-}
-
 // WithTimeUnit 用于设定队列时间单位
 func WithTimeUnit(unit time.Duration) Option {
 	return func(opt *option) {
 		if unit <= 0 {
-			unit = time.Millisecond
+			unit = time.Second
 		}
 		opt.unit = unit
 	}
@@ -34,7 +24,7 @@ func WithTimeProvider(f func() int64) Option {
 	return func(opt *option) {
 		if f == nil {
 			f = func() int64 {
-				return time.Now().UnixMilli()
+				return time.Now().Unix()
 			}
 		}
 		opt.timer = f
@@ -42,13 +32,15 @@ func WithTimeProvider(f func() int64) Option {
 }
 
 type option struct {
-	capacity int
-	unit     time.Duration
-	timer    func() int64
+	unit  time.Duration
+	timer func() int64
 }
 
 // Queue 延迟队列
 type Queue interface {
+	// Now 获取队列使用的当前时间
+	Now() int64
+
 	// Len 获取队列元素数量
 	Len() int
 
@@ -58,6 +50,7 @@ type Queue interface {
 
 	// Dequeue 获取队列中已过期的元素及其过期时间，并且将该元素从队列中删除
 	// 如果队列中没有过期的元素，则本方法会一直阻塞，直到有过期的元素
+	// 如果队列被关闭，则返回 nil 和 -1
 	Dequeue() (interface{}, int64)
 
 	// Close 关闭延迟队列
@@ -78,18 +71,24 @@ type delayQueue struct {
 func New(opts ...Option) Queue {
 	var q = &delayQueue{}
 	q.option = &option{
-		capacity: 32,
-		unit:     time.Millisecond,
+		unit: time.Second,
+		timer: func() int64 {
+			return time.Now().Unix()
+		},
 	}
 	for _, opt := range opts {
 		opt(q.option)
 	}
 
-	q.pq = priority.New(q.option.capacity)
+	q.pq = priority.New()
 	q.wakeup = make(chan struct{})
 	q.close = make(chan struct{})
 
 	return q
+}
+
+func (dq *delayQueue) Now() int64 {
+	return dq.option.timer()
 }
 
 func (dq *delayQueue) Len() int {
@@ -156,6 +155,13 @@ ReadLoop:
 		}
 
 		break ReadLoop
+	}
+
+	select {
+	case <-dq.close:
+		value = nil
+		expiration = -1
+	default:
 	}
 
 	atomic.StoreInt32(&dq.sleeping, 0)
