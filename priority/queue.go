@@ -137,7 +137,7 @@ func (pq *priorityQueue) Peek(max int64) (interface{}, int64, int64) {
 }
 
 func (pq *priorityQueue) Update(item Item, priority int64) {
-	if item == nil {
+	if item == nil || item.getIndex() < 0 {
 		return
 	}
 
@@ -146,7 +146,5 @@ func (pq *priorityQueue) Update(item Item, priority int64) {
 	}
 	item.updatePriority(priority)
 
-	if item.getIndex() >= 0 {
-		heap.Fix(pq, item.getIndex())
-	}
+	heap.Fix(pq, item.getIndex())
 }
