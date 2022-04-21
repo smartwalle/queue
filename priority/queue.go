@@ -6,7 +6,7 @@ import (
 	"container/heap"
 )
 
-type Item interface {
+type Element interface {
 	IsFirst() bool
 
 	getIndex() int
@@ -14,22 +14,22 @@ type Item interface {
 	updatePriority(int64)
 }
 
-type queueItem struct {
+type queueElement struct {
 	value    interface{}
 	priority int64
 	index    int
 }
 
-func (item *queueItem) IsFirst() bool {
-	return item.index == 0
+func (ele *queueElement) IsFirst() bool {
+	return ele.index == 0
 }
 
-func (item *queueItem) getIndex() int {
-	return item.index
+func (ele *queueElement) getIndex() int {
+	return ele.index
 }
 
-func (item *queueItem) updatePriority(priority int64) {
-	item.priority = priority
+func (ele *queueElement) updatePriority(priority int64) {
+	ele.priority = priority
 }
 
 // Queue 优先级队列
@@ -40,7 +40,7 @@ type Queue interface {
 
 	// Enqueue 添加元素到队列
 	// 参数 priority 的值不能小于 0
-	Enqueue(value interface{}, priority int64) Item
+	Enqueue(value interface{}, priority int64) Element
 
 	// Dequeue 获取队列中的第一个元素及其优先级，并且将该元素从队列中删除
 	// 如果队列中没有元素，则返回 nil 和 -1
@@ -53,10 +53,10 @@ type Queue interface {
 	Peek(max int64) (interface{}, int64, int64)
 
 	// Update 更新元素的优先级
-	Update(item Item, priority int64)
+	Update(ele Element, priority int64)
 }
 
-type priorityQueue []*queueItem
+type priorityQueue []*queueElement
 
 func New() Queue {
 	var nQueue = make(priorityQueue, 0, 32)
@@ -86,9 +86,9 @@ func (pq *priorityQueue) Push(x interface{}) {
 		*pq = npq
 	}
 	*pq = (*pq)[0 : n+1]
-	nItem := x.(*queueItem)
-	nItem.index = n
-	(*pq)[n] = nItem
+	ele := x.(*queueElement)
+	ele.index = n
+	(*pq)[n] = ele
 }
 
 func (pq *priorityQueue) Pop() interface{} {
@@ -99,27 +99,27 @@ func (pq *priorityQueue) Pop() interface{} {
 		copy(npq, *pq)
 		*pq = npq
 	}
-	var nItem = (*pq)[n-1]
-	nItem.index = -1
+	var ele = (*pq)[n-1]
+	ele.index = -1
 	*pq = (*pq)[0 : n-1]
-	return nItem
+	return ele
 }
 
-func (pq *priorityQueue) Enqueue(value interface{}, priority int64) Item {
+func (pq *priorityQueue) Enqueue(value interface{}, priority int64) Element {
 	if priority < 0 {
 		priority = 0
 	}
-	var nItem = &queueItem{value: value, priority: priority}
-	heap.Push(pq, nItem)
-	return nItem
+	var ele = &queueElement{value: value, priority: priority}
+	heap.Push(pq, ele)
+	return ele
 }
 
 func (pq *priorityQueue) Dequeue() (interface{}, int64) {
 	if pq.Len() == 0 {
 		return nil, -1
 	}
-	var nItem = heap.Pop(pq).(*queueItem)
-	return nItem.value, nItem.priority
+	var ele = heap.Pop(pq).(*queueElement)
+	return ele.value, ele.priority
 }
 
 func (pq *priorityQueue) Peek(max int64) (interface{}, int64, int64) {
@@ -127,24 +127,24 @@ func (pq *priorityQueue) Peek(max int64) (interface{}, int64, int64) {
 		return nil, -1, 0
 	}
 
-	var nItem = (*pq)[0]
-	if nItem.priority > max {
-		return nil, nItem.priority, nItem.priority - max
+	var ele = (*pq)[0]
+	if ele.priority > max {
+		return nil, ele.priority, ele.priority - max
 	}
 	heap.Remove(pq, 0)
 
-	return nItem.value, nItem.priority, 0
+	return ele.value, ele.priority, 0
 }
 
-func (pq *priorityQueue) Update(item Item, priority int64) {
-	if item == nil || item.getIndex() < 0 {
+func (pq *priorityQueue) Update(ele Element, priority int64) {
+	if ele == nil || ele.getIndex() < 0 {
 		return
 	}
 
 	if priority < 0 {
 		priority = 0
 	}
-	item.updatePriority(priority)
+	ele.updatePriority(priority)
 
-	heap.Fix(pq, item.getIndex())
+	heap.Fix(pq, ele.getIndex())
 }

@@ -46,7 +46,7 @@ type Queue interface {
 
 	// Enqueue 添加元素到队列
 	// 参数 expiration 的值不能小于 0
-	Enqueue(value interface{}, expiration int64) priority.Item
+	Enqueue(value interface{}, expiration int64) priority.Element
 
 	// Dequeue 获取队列中已过期的元素及其过期时间，并且将该元素从队列中删除
 	// 如果队列中没有过期的元素，则本方法会一直阻塞，直到有过期的元素
@@ -54,7 +54,7 @@ type Queue interface {
 	Dequeue() (interface{}, int64)
 
 	// Update 更新元素的过期时间
-	Update(item priority.Item, expiration int64)
+	Update(ele priority.Element, expiration int64)
 
 	// Close 关闭延迟队列
 	Close()
@@ -100,20 +100,20 @@ func (dq *delayQueue) Len() int {
 	return dq.pq.Len()
 }
 
-func (dq *delayQueue) Enqueue(value interface{}, expiration int64) priority.Item {
+func (dq *delayQueue) Enqueue(value interface{}, expiration int64) priority.Element {
 	select {
 	case <-dq.close:
 	default:
 		dq.mu.Lock()
-		var nItem = dq.pq.Enqueue(value, expiration)
+		var ele = dq.pq.Enqueue(value, expiration)
 		dq.mu.Unlock()
 
-		if nItem.IsFirst() {
+		if ele.IsFirst() {
 			if atomic.CompareAndSwapInt32(&dq.sleeping, 1, 0) {
 				dq.wakeup <- struct{}{}
 			}
 		}
-		return nItem
+		return ele
 	}
 	return nil
 }
@@ -174,12 +174,12 @@ ReadLoop:
 	return value, expiration
 }
 
-func (dq *delayQueue) Update(item priority.Item, expiration int64) {
+func (dq *delayQueue) Update(ele priority.Element, expiration int64) {
 	dq.mu.Lock()
-	dq.pq.Update(item, expiration)
+	dq.pq.Update(ele, expiration)
 	dq.mu.Unlock()
 
-	if item.IsFirst() {
+	if ele.IsFirst() {
 		if atomic.CompareAndSwapInt32(&dq.sleeping, 1, 0) {
 			dq.wakeup <- struct{}{}
 		}
