@@ -45,6 +45,7 @@ func New(opts ...Option) Queue {
 			opt(q.option)
 		}
 	}
+	q.elements = make([]interface{}, 0, 32)
 	q.cond = sync.NewCond(&sync.Mutex{})
 	q.close = make(chan struct{})
 	return q
@@ -59,7 +60,17 @@ func (bq *blockQueue) Enqueue(value interface{}) {
 			bq.cond.Wait()
 		}
 
-		bq.elements = append(bq.elements, value)
+		n := len(bq.elements)
+		c := cap(bq.elements)
+		if n+1 > c {
+			npq := make([]interface{}, n, c*2)
+			copy(npq, bq.elements)
+			bq.elements = npq
+		}
+		bq.elements = bq.elements[0 : n+1]
+		bq.elements[n] = value
+
+		//bq.elements = append(bq.elements, value)
 		bq.cond.L.Unlock()
 		bq.cond.Signal()
 	}

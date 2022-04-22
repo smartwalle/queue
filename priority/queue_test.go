@@ -12,11 +12,5 @@ func BenchmarkPriorityQueue_Enqueue(b *testing.B) {
 		q.Enqueue(i, int64(i))
 	}
 
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		q.Dequeue()
-	}
-
 	b.Log(b.N)
 }
