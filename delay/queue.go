@@ -38,9 +38,6 @@ type option struct {
 
 // Queue 延迟队列
 type Queue interface {
-	// Now 获取队列使用的当前时间
-	Now() int64
-
 	// Len 获取队列元素数量
 	Len() int
 
@@ -93,10 +90,6 @@ func New(opts ...Option) Queue {
 	q.close = make(chan struct{})
 
 	return q
-}
-
-func (dq *delayQueue) Now() int64 {
-	return dq.option.timer()
 }
 
 func (dq *delayQueue) Len() int {
