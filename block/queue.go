@@ -4,6 +4,18 @@ import (
 	"sync"
 )
 
+type Option func(opt *option)
+
+func WithMaxSize(max int) Option {
+	return func(opt *option) {
+		opt.max = max
+	}
+}
+
+type option struct {
+	max int
+}
+
 type Queue interface {
 	// Enqueue 添加元素到队列
 	Enqueue(value interface{})
@@ -18,13 +30,20 @@ type Queue interface {
 }
 
 type blockQueue struct {
+	*option
 	elements []interface{}
 	cond     *sync.Cond
 	close    chan struct{}
 }
 
-func New() Queue {
+func New(opts ...Option) Queue {
 	var q = &blockQueue{}
+	q.option = &option{}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(q.option)
+		}
+	}
 	q.cond = sync.NewCond(&sync.Mutex{})
 	q.close = make(chan struct{})
 	return q
@@ -35,6 +54,9 @@ func (bq *blockQueue) Enqueue(value interface{}) {
 	case <-bq.close:
 	default:
 		bq.cond.L.Lock()
+		if bq.option.max > 0 && len(bq.elements)+1 > bq.option.max {
+			bq.cond.Wait()
+		}
 
 		bq.elements = append(bq.elements, value)
 		bq.cond.L.Unlock()
@@ -70,6 +92,7 @@ func (bq *blockQueue) Dequeue(elements *[]interface{}) {
 
 	bq.elements = bq.elements[0:0]
 	bq.cond.L.Unlock()
+	bq.cond.Signal()
 }
 
 func (bq *blockQueue) Close() {
