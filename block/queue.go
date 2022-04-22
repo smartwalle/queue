@@ -5,10 +5,15 @@ import (
 )
 
 type Queue interface {
+	// Enqueue 添加元素到队列
 	Enqueue(value interface{})
 
+	// Dequeue 获取队列中的所有元素
+	// 如果队列中没有元素，则本方法会一直阻塞，直到有元素
+	// 如果队列被关闭，会添加一个 nil 到元素列表的结尾，调用者可以根据是否获取到 nil 元素来判断队列是否关闭
 	Dequeue(*[]interface{})
 
+	// Close 关闭队列
 	Close()
 }
 
@@ -30,9 +35,9 @@ func (bq *blockQueue) Enqueue(value interface{}) {
 	case <-bq.close:
 	default:
 		bq.cond.L.Lock()
+
 		bq.elements = append(bq.elements, value)
 		bq.cond.L.Unlock()
-
 		bq.cond.Signal()
 	}
 }
@@ -54,6 +59,11 @@ func (bq *blockQueue) Dequeue(elements *[]interface{}) {
 	for _, ele := range bq.elements {
 		*elements = append(*elements, ele)
 		if ele == nil {
+			select {
+			case <-bq.close:
+			default:
+				close(bq.close)
+			}
 			break
 		}
 	}
@@ -63,13 +73,5 @@ func (bq *blockQueue) Dequeue(elements *[]interface{}) {
 }
 
 func (bq *blockQueue) Close() {
-	select {
-	case <-bq.close:
-	default:
-		bq.cond.L.Lock()
-		close(bq.close)
-		bq.cond.L.Unlock()
-
-		bq.cond.Signal()
-	}
+	bq.Enqueue(nil)
 }

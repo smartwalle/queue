@@ -40,7 +40,6 @@ func main() {
 
 	time.Sleep(time.Second * 1)
 	bQueue.Close()
-	bQueue.Enqueue("5")
 
 	time.Sleep(time.Second * 5)
 
