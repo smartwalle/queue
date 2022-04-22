@@ -56,6 +56,9 @@ type Queue interface {
 	// Update 更新元素的过期时间
 	Update(ele priority.Element, expiration int64)
 
+	// Remove 从队列中删除元素
+	Remove(ele priority.Element)
+
 	// Close 关闭延迟队列
 	Close()
 }
@@ -180,6 +183,21 @@ func (dq *delayQueue) Update(ele priority.Element, expiration int64) {
 	dq.mu.Unlock()
 
 	if ele.IsFirst() {
+		if atomic.CompareAndSwapInt32(&dq.sleeping, 1, 0) {
+			dq.wakeup <- struct{}{}
+		}
+	}
+}
+func (dq *delayQueue) Remove(ele priority.Element) {
+	var isFirst = false
+	if ele != nil {
+		isFirst = ele.IsFirst()
+	}
+	dq.mu.Lock()
+	dq.pq.Remove(ele)
+	dq.mu.Unlock()
+
+	if isFirst {
 		if atomic.CompareAndSwapInt32(&dq.sleeping, 1, 0) {
 			dq.wakeup <- struct{}{}
 		}

@@ -54,6 +54,9 @@ type Queue interface {
 
 	// Update 更新元素的优先级
 	Update(ele Element, priority int64)
+
+	// Remove 从队列中删除元素
+	Remove(ele Element)
 }
 
 type priorityQueue []*queueElement
@@ -141,10 +144,26 @@ func (pq *priorityQueue) Update(ele Element, priority int64) {
 		return
 	}
 
+	if (*pq)[ele.getIndex()] != ele {
+		return
+	}
+
 	if priority < 0 {
 		priority = 0
 	}
 	ele.updatePriority(priority)
 
 	heap.Fix(pq, ele.getIndex())
+}
+
+func (pq *priorityQueue) Remove(ele Element) {
+	if ele == nil || ele.getIndex() < 0 {
+		return
+	}
+
+	if (*pq)[ele.getIndex()] != ele {
+		return
+	}
+
+	heap.Remove(pq, ele.getIndex())
 }
