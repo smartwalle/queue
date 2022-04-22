@@ -16,6 +16,7 @@ type option struct {
 	max int
 }
 
+// Queue 阻塞队列
 type Queue interface {
 	// Enqueue 添加元素到队列
 	Enqueue(value interface{})
