@@ -205,5 +205,9 @@ func (dq *delayQueue) Remove(ele priority.Element) {
 }
 
 func (dq *delayQueue) Close() {
-	close(dq.close)
+	select {
+	case <-dq.close:
+	default:
+		close(dq.close)
+	}
 }
