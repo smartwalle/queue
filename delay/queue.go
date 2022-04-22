@@ -59,7 +59,7 @@ type Queue interface {
 	// Remove 从队列中删除元素
 	Remove(ele priority.Element)
 
-	// Close 关闭延迟队列
+	// Close 关闭队列
 	Close()
 }
 
@@ -178,28 +178,36 @@ ReadLoop:
 }
 
 func (dq *delayQueue) Update(ele priority.Element, expiration int64) {
-	dq.mu.Lock()
-	dq.pq.Update(ele, expiration)
-	dq.mu.Unlock()
+	select {
+	case <-dq.close:
+	default:
+		dq.mu.Lock()
+		dq.pq.Update(ele, expiration)
+		dq.mu.Unlock()
 
-	if ele.IsFirst() {
-		if atomic.CompareAndSwapInt32(&dq.sleeping, 1, 0) {
-			dq.wakeup <- struct{}{}
+		if ele.IsFirst() {
+			if atomic.CompareAndSwapInt32(&dq.sleeping, 1, 0) {
+				dq.wakeup <- struct{}{}
+			}
 		}
 	}
 }
 func (dq *delayQueue) Remove(ele priority.Element) {
-	var isFirst = false
-	if ele != nil {
-		isFirst = ele.IsFirst()
-	}
-	dq.mu.Lock()
-	dq.pq.Remove(ele)
-	dq.mu.Unlock()
+	select {
+	case <-dq.close:
+	default:
+		var isFirst = false
+		if ele != nil {
+			isFirst = ele.IsFirst()
+		}
+		dq.mu.Lock()
+		dq.pq.Remove(ele)
+		dq.mu.Unlock()
 
-	if isFirst {
-		if atomic.CompareAndSwapInt32(&dq.sleeping, 1, 0) {
-			dq.wakeup <- struct{}{}
+		if isFirst {
+			if atomic.CompareAndSwapInt32(&dq.sleeping, 1, 0) {
+				dq.wakeup <- struct{}{}
+			}
 		}
 	}
 }
