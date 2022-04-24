@@ -58,6 +58,9 @@ type Queue interface {
 
 	// Close 关闭队列
 	Close()
+
+	// Closed 获取队列是否关闭
+	Closed() bool
 }
 
 type delayQueue struct {
@@ -104,7 +107,7 @@ func (dq *delayQueue) Enqueue(value interface{}, expiration int64) priority.Elem
 		var ele = dq.pq.Enqueue(value, expiration)
 		dq.mu.Unlock()
 
-		if ele.IsFirst() {
+		if ele != nil && ele.IsFirst() {
 			if atomic.CompareAndSwapInt32(&dq.sleeping, 1, 0) {
 				dq.wakeup <- struct{}{}
 			}
@@ -210,5 +213,14 @@ func (dq *delayQueue) Close() {
 	case <-dq.close:
 	default:
 		close(dq.close)
+	}
+}
+
+func (dq *delayQueue) Closed() bool {
+	select {
+	case <-dq.close:
+		return true
+	default:
+		return false
 	}
 }

@@ -19,7 +19,7 @@ type option struct {
 // Queue 阻塞队列
 type Queue interface {
 	// Enqueue 添加元素到队列
-	Enqueue(value interface{})
+	Enqueue(value interface{}) bool
 
 	// Dequeue 获取队列中的所有元素
 	// 如果队列中没有元素，则本方法会一直阻塞，直到有元素
@@ -28,6 +28,9 @@ type Queue interface {
 
 	// Close 关闭队列
 	Close()
+
+	// Closed 获取队列是否关闭
+	Closed() bool
 }
 
 type blockQueue struct {
@@ -51,9 +54,10 @@ func New(opts ...Option) Queue {
 	return q
 }
 
-func (bq *blockQueue) Enqueue(value interface{}) {
+func (bq *blockQueue) Enqueue(value interface{}) bool {
 	select {
 	case <-bq.close:
+		return false
 	default:
 		bq.cond.L.Lock()
 		if bq.option.max > 0 && len(bq.elements)+1 > bq.option.max {
@@ -73,6 +77,7 @@ func (bq *blockQueue) Enqueue(value interface{}) {
 		//bq.elements = append(bq.elements, value)
 		bq.cond.L.Unlock()
 		bq.cond.Signal()
+		return true
 	}
 }
 
@@ -93,11 +98,6 @@ func (bq *blockQueue) Dequeue(elements *[]interface{}) {
 	for _, ele := range bq.elements {
 		*elements = append(*elements, ele)
 		if ele == nil {
-			select {
-			case <-bq.close:
-			default:
-				close(bq.close)
-			}
 			break
 		}
 	}
@@ -108,5 +108,19 @@ func (bq *blockQueue) Dequeue(elements *[]interface{}) {
 }
 
 func (bq *blockQueue) Close() {
-	bq.Enqueue(nil)
+	select {
+	case <-bq.close:
+	default:
+		close(bq.close)
+		bq.cond.Signal()
+	}
+}
+
+func (bq *blockQueue) Closed() bool {
+	select {
+	case <-bq.close:
+		return true
+	default:
+		return false
+	}
 }
