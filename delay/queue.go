@@ -43,6 +43,7 @@ type Queue interface {
 
 	// Enqueue 添加元素到队列
 	// 参数 expiration 的值不能小于 0
+	// 如果队列已关闭，则返回 nil
 	Enqueue(value interface{}, expiration int64) priority.Element
 
 	// Dequeue 获取队列中已过期的元素及其过期时间，并且将该元素从队列中删除

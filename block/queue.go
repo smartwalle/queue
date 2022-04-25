@@ -19,6 +19,7 @@ type option struct {
 // Queue 阻塞队列
 type Queue interface {
 	// Enqueue 添加元素到队列
+	// 如果队列已关闭，则返回 false
 	Enqueue(value interface{}) bool
 
 	// Dequeue 获取队列中的所有元素
@@ -57,7 +58,6 @@ func New(opts ...Option) Queue {
 func (bq *blockQueue) Enqueue(value interface{}) bool {
 	select {
 	case <-bq.close:
-		return false
 	default:
 		bq.cond.L.Lock()
 		if bq.option.max > 0 && len(bq.elements)+1 > bq.option.max {
@@ -79,6 +79,7 @@ func (bq *blockQueue) Enqueue(value interface{}) bool {
 		bq.cond.Signal()
 		return true
 	}
+	return false
 }
 
 func (bq *blockQueue) Dequeue(elements *[]interface{}) {
