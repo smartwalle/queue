@@ -141,6 +141,7 @@ func (pq *priorityQueue) Dequeue() (interface{}, int64) {
 
 	ele.value = nil
 	ele.priority = -1
+	ele.index = -1
 	pq.pool.Put(ele)
 
 	return value, priority
@@ -162,6 +163,7 @@ func (pq *priorityQueue) Peek(max int64) (interface{}, int64, int64) {
 
 	ele.value = nil
 	ele.priority = -1
+	ele.index = -1
 	pq.pool.Put(ele)
 
 	return value, priority, 0
