@@ -4,6 +4,7 @@ package priority
 
 import (
 	"container/heap"
+	"sync"
 )
 
 type Element interface {
@@ -59,52 +60,61 @@ type Queue interface {
 	Remove(ele Element)
 }
 
-type priorityQueue []*queueElement
+type priorityQueue struct {
+	elements []*queueElement
+	pool     *sync.Pool
+}
 
 func New() Queue {
-	var nQueue = make(priorityQueue, 0, 32)
-	return &nQueue
+	var q = &priorityQueue{}
+	q.elements = make([]*queueElement, 0, 32)
+	q.pool = &sync.Pool{
+		New: func() interface{} {
+			return &queueElement{}
+		},
+	}
+	return q
 }
 
-func (pq priorityQueue) Len() int {
-	return len(pq)
+func (pq *priorityQueue) Len() int {
+	return len(pq.elements)
 }
 
-func (pq priorityQueue) Less(i, j int) bool {
-	return pq[i].priority < pq[j].priority
+func (pq *priorityQueue) Less(i, j int) bool {
+	return pq.elements[i].priority < pq.elements[j].priority
 }
 
-func (pq priorityQueue) Swap(i, j int) {
-	pq[i], pq[j] = pq[j], pq[i]
-	pq[i].index = i
-	pq[j].index = j
+func (pq *priorityQueue) Swap(i, j int) {
+	pq.elements[i], pq.elements[j] = pq.elements[j], pq.elements[i]
+	pq.elements[i].index = i
+	pq.elements[j].index = j
 }
 
 func (pq *priorityQueue) Push(x interface{}) {
-	n := len(*pq)
-	c := cap(*pq)
+	n := len(pq.elements)
+	c := cap(pq.elements)
 	if n+1 > c {
-		npq := make(priorityQueue, n, c*2)
-		copy(npq, *pq)
-		*pq = npq
+		npq := make([]*queueElement, n, c*2)
+		copy(npq, pq.elements)
+		pq.elements = npq
 	}
-	*pq = (*pq)[0 : n+1]
+	pq.elements = pq.elements[0 : n+1]
 	ele := x.(*queueElement)
 	ele.index = n
-	(*pq)[n] = ele
+	pq.elements[n] = ele
 }
 
 func (pq *priorityQueue) Pop() interface{} {
-	n := len(*pq)
-	c := cap(*pq)
+	n := len(pq.elements)
+	c := cap(pq.elements)
 	if n < (c/2) && c > 32 {
-		npq := make(priorityQueue, n, c/2)
-		copy(npq, *pq)
-		*pq = npq
+		npq := make([]*queueElement, n, c/2)
+		copy(npq, pq.elements)
+		pq.elements = npq
 	}
-	var ele = (*pq)[n-1]
+	var ele = pq.elements[n-1]
 	ele.index = -1
-	*pq = (*pq)[0 : n-1]
+	pq.elements = pq.elements[0 : n-1]
 	return ele
 }
 
@@ -112,7 +122,10 @@ func (pq *priorityQueue) Enqueue(value interface{}, priority int64) Element {
 	if priority < 0 {
 		priority = 0
 	}
-	var ele = &queueElement{value: value, priority: priority}
+	var ele = pq.pool.Get().(*queueElement)
+	ele.value = value
+	ele.priority = priority
+
 	heap.Push(pq, ele)
 	return ele
 }
@@ -122,7 +135,15 @@ func (pq *priorityQueue) Dequeue() (interface{}, int64) {
 		return nil, -1
 	}
 	var ele = heap.Pop(pq).(*queueElement)
-	return ele.value, ele.priority
+
+	var value = ele.value
+	var priority = ele.priority
+
+	ele.value = nil
+	ele.priority = -1
+	pq.pool.Put(ele)
+
+	return value, priority
 }
 
 func (pq *priorityQueue) Peek(max int64) (interface{}, int64, int64) {
@@ -130,13 +151,20 @@ func (pq *priorityQueue) Peek(max int64) (interface{}, int64, int64) {
 		return nil, -1, 0
 	}
 
-	var ele = (*pq)[0]
+	var ele = pq.elements[0]
 	if ele.priority > max {
 		return nil, ele.priority, ele.priority - max
 	}
 	heap.Remove(pq, 0)
 
-	return ele.value, ele.priority, 0
+	var value = ele.value
+	var priority = ele.priority
+
+	ele.value = nil
+	ele.priority = -1
+	pq.pool.Put(ele)
+
+	return value, priority, 0
 }
 
 func (pq *priorityQueue) Update(ele Element, priority int64) {
@@ -144,7 +172,7 @@ func (pq *priorityQueue) Update(ele Element, priority int64) {
 		return
 	}
 
-	if (*pq)[ele.getIndex()] != ele {
+	if pq.elements[ele.getIndex()] != ele {
 		return
 	}
 
@@ -161,7 +189,7 @@ func (pq *priorityQueue) Remove(ele Element) {
 		return
 	}
 
-	if (*pq)[ele.getIndex()] != ele {
+	if pq.elements[ele.getIndex()] != ele {
 		return
 	}
 
