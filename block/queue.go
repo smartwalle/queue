@@ -2,6 +2,7 @@ package block
 
 import (
 	"sync"
+	"sync/atomic"
 )
 
 type Option func(opt *option)
@@ -38,7 +39,7 @@ type blockQueue struct {
 	*option
 	elements []interface{}
 	cond     *sync.Cond
-	close    chan struct{}
+	close    int32
 }
 
 func New(opts ...Option) Queue {
@@ -51,49 +52,45 @@ func New(opts ...Option) Queue {
 	}
 	q.elements = make([]interface{}, 0, 32)
 	q.cond = sync.NewCond(&sync.Mutex{})
-	q.close = make(chan struct{})
+	//q.close = make(chan struct{})
 	return q
 }
 
 func (bq *blockQueue) Enqueue(value interface{}) bool {
-	select {
-	case <-bq.close:
-	default:
-		bq.cond.L.Lock()
-		if bq.option.max > 0 && len(bq.elements)+1 > bq.option.max {
-			bq.cond.Wait()
-		}
-
-		n := len(bq.elements)
-		c := cap(bq.elements)
-		if n+1 > c {
-			npq := make([]interface{}, n, c*2)
-			copy(npq, bq.elements)
-			bq.elements = npq
-		}
-		bq.elements = bq.elements[0 : n+1]
-		bq.elements[n] = value
-
-		//bq.elements = append(bq.elements, value)
-		bq.cond.L.Unlock()
-		bq.cond.Signal()
-		return true
+	if atomic.LoadInt32(&bq.close) == 1 {
+		return false
 	}
-	return false
+
+	bq.cond.L.Lock()
+	if bq.option.max > 0 && len(bq.elements)+1 > bq.option.max {
+		bq.cond.Wait()
+	}
+
+	n := len(bq.elements)
+	c := cap(bq.elements)
+	if n+1 > c {
+		npq := make([]interface{}, n, c*2)
+		copy(npq, bq.elements)
+		bq.elements = npq
+	}
+	bq.elements = bq.elements[0 : n+1]
+	bq.elements[n] = value
+
+	bq.cond.L.Unlock()
+	bq.cond.Signal()
+	return true
 }
 
 func (bq *blockQueue) Dequeue(elements *[]interface{}) {
 	bq.cond.L.Lock()
 
 	for len(bq.elements) == 0 {
-		select {
-		case <-bq.close:
+		if atomic.LoadInt32(&bq.close) == 1 {
 			bq.cond.L.Unlock()
 			*elements = append(*elements, nil)
 			return
-		default:
-			bq.cond.Wait()
 		}
+		bq.cond.Wait()
 	}
 
 	for _, ele := range bq.elements {
@@ -109,19 +106,11 @@ func (bq *blockQueue) Dequeue(elements *[]interface{}) {
 }
 
 func (bq *blockQueue) Close() {
-	select {
-	case <-bq.close:
-	default:
-		close(bq.close)
+	if atomic.CompareAndSwapInt32(&bq.close, 0, 1) {
 		bq.cond.Signal()
 	}
 }
 
 func (bq *blockQueue) Closed() bool {
-	select {
-	case <-bq.close:
-		return true
-	default:
-		return false
-	}
+	return atomic.LoadInt32(&bq.close) == 1
 }
