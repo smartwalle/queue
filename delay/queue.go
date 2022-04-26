@@ -72,8 +72,7 @@ type delayQueue struct {
 
 	sleeping int32
 	wakeup   chan struct{}
-	//close    chan struct{}
-	closed int32
+	closed   int32
 }
 
 func New(opts ...Option) Queue {
@@ -92,8 +91,6 @@ func New(opts ...Option) Queue {
 
 	q.pq = priority.New()
 	q.wakeup = make(chan struct{})
-	//q.close = make(chan struct{})
-
 	return q
 }
 
@@ -102,10 +99,6 @@ func (dq *delayQueue) Len() int {
 }
 
 func (dq *delayQueue) Enqueue(value interface{}, expiration int64) priority.Element {
-	//select {
-	//case <-dq.close:
-	//default:
-
 	if atomic.LoadInt32(&dq.closed) == 1 {
 		return nil
 	}
@@ -120,8 +113,6 @@ func (dq *delayQueue) Enqueue(value interface{}, expiration int64) priority.Elem
 		}
 	}
 	return ele
-	//}
-	//return nil
 }
 
 func (dq *delayQueue) Dequeue() (interface{}, int64) {
