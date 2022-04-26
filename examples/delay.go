@@ -38,7 +38,9 @@ func main() {
 	}()
 
 	time.Sleep(time.Second * 5)
-
+	dQueue.Enqueue("有效", time.Now().Unix())
+	time.Sleep(time.Second * 1)
 	dQueue.Close()
+	dQueue.Enqueue("无效", time.Now().Add(time.Second*1).Unix())
 	time.Sleep(time.Second * 2)
 }

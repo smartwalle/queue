@@ -72,7 +72,8 @@ type delayQueue struct {
 
 	sleeping int32
 	wakeup   chan struct{}
-	close    chan struct{}
+	//close    chan struct{}
+	closed int32
 }
 
 func New(opts ...Option) Queue {
@@ -91,7 +92,7 @@ func New(opts ...Option) Queue {
 
 	q.pq = priority.New()
 	q.wakeup = make(chan struct{})
-	q.close = make(chan struct{})
+	//q.close = make(chan struct{})
 
 	return q
 }
@@ -101,21 +102,26 @@ func (dq *delayQueue) Len() int {
 }
 
 func (dq *delayQueue) Enqueue(value interface{}, expiration int64) priority.Element {
-	select {
-	case <-dq.close:
-	default:
-		dq.mu.Lock()
-		var ele = dq.pq.Enqueue(value, expiration)
-		dq.mu.Unlock()
+	//select {
+	//case <-dq.close:
+	//default:
 
-		if ele != nil && ele.IsFirst() {
-			if atomic.CompareAndSwapInt32(&dq.sleeping, 1, 0) {
-				dq.wakeup <- struct{}{}
-			}
-		}
-		return ele
+	if atomic.LoadInt32(&dq.closed) == 1 {
+		return nil
 	}
-	return nil
+
+	dq.mu.Lock()
+	var ele = dq.pq.Enqueue(value, expiration)
+	dq.mu.Unlock()
+
+	if ele != nil && ele.IsFirst() {
+		if atomic.CompareAndSwapInt32(&dq.sleeping, 1, 0) {
+			dq.wakeup <- struct{}{}
+		}
+	}
+	return ele
+	//}
+	//return nil
 }
 
 func (dq *delayQueue) Dequeue() (interface{}, int64) {
@@ -138,24 +144,25 @@ ReadLoop:
 			if delay == 0 {
 				select {
 				case <-dq.wakeup:
+					if atomic.LoadInt32(&dq.closed) == 1 {
+						break ReadLoop
+					}
 					continue
-				case <-dq.close:
-					break ReadLoop
 				}
 			} else if delay > 0 {
 				var timer = time.NewTimer(time.Duration(delay) * dq.option.unit)
 				select {
 				case <-dq.wakeup:
 					timer.Stop()
+					if atomic.LoadInt32(&dq.closed) == 1 {
+						break ReadLoop
+					}
 					continue
 				case <-timer.C:
 					if atomic.SwapInt32(&dq.sleeping, 0) == 0 {
 						<-dq.wakeup
 					}
 					continue
-				case <-dq.close:
-					timer.Stop()
-					break ReadLoop
 				}
 			}
 		}
@@ -163,11 +170,9 @@ ReadLoop:
 		break ReadLoop
 	}
 
-	select {
-	case <-dq.close:
+	if atomic.LoadInt32(&dq.closed) == 1 {
 		value = nil
 		expiration = -1
-	default:
 	}
 
 	atomic.StoreInt32(&dq.sleeping, 0)
@@ -175,53 +180,46 @@ ReadLoop:
 }
 
 func (dq *delayQueue) Update(ele priority.Element, expiration int64) {
-	select {
-	case <-dq.close:
-	default:
-		dq.mu.Lock()
-		dq.pq.Update(ele, expiration)
-		dq.mu.Unlock()
+	if atomic.LoadInt32(&dq.closed) == 1 {
+		return
+	}
 
-		if ele.IsFirst() {
-			if atomic.CompareAndSwapInt32(&dq.sleeping, 1, 0) {
-				dq.wakeup <- struct{}{}
-			}
+	dq.mu.Lock()
+	dq.pq.Update(ele, expiration)
+	dq.mu.Unlock()
+
+	if ele.IsFirst() {
+		if atomic.CompareAndSwapInt32(&dq.sleeping, 1, 0) {
+			dq.wakeup <- struct{}{}
 		}
 	}
 }
 func (dq *delayQueue) Remove(ele priority.Element) {
-	select {
-	case <-dq.close:
-	default:
-		var isFirst = false
-		if ele != nil {
-			isFirst = ele.IsFirst()
-		}
-		dq.mu.Lock()
-		dq.pq.Remove(ele)
-		dq.mu.Unlock()
+	if atomic.LoadInt32(&dq.closed) == 1 {
+		return
+	}
 
-		if isFirst {
-			if atomic.CompareAndSwapInt32(&dq.sleeping, 1, 0) {
-				dq.wakeup <- struct{}{}
-			}
+	var isFirst = false
+	if ele != nil {
+		isFirst = ele.IsFirst()
+	}
+	dq.mu.Lock()
+	dq.pq.Remove(ele)
+	dq.mu.Unlock()
+
+	if isFirst {
+		if atomic.CompareAndSwapInt32(&dq.sleeping, 1, 0) {
+			dq.wakeup <- struct{}{}
 		}
 	}
 }
 
 func (dq *delayQueue) Close() {
-	select {
-	case <-dq.close:
-	default:
-		close(dq.close)
+	if atomic.CompareAndSwapInt32(&dq.closed, 0, 1) {
+		dq.wakeup <- struct{}{}
 	}
 }
 
 func (dq *delayQueue) Closed() bool {
-	select {
-	case <-dq.close:
-		return true
-	default:
-		return false
-	}
+	return atomic.LoadInt32(&dq.closed) == 1
 }
