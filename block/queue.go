@@ -39,7 +39,7 @@ type blockQueue struct {
 	*option
 	elements []interface{}
 	cond     *sync.Cond
-	close    int32
+	closed   int32
 }
 
 func New(opts ...Option) Queue {
@@ -52,12 +52,11 @@ func New(opts ...Option) Queue {
 	}
 	q.elements = make([]interface{}, 0, 32)
 	q.cond = sync.NewCond(&sync.Mutex{})
-	//q.close = make(chan struct{})
 	return q
 }
 
 func (bq *blockQueue) Enqueue(value interface{}) bool {
-	if atomic.LoadInt32(&bq.close) == 1 {
+	if atomic.LoadInt32(&bq.closed) == 1 {
 		return false
 	}
 
@@ -85,7 +84,7 @@ func (bq *blockQueue) Dequeue(elements *[]interface{}) {
 	bq.cond.L.Lock()
 
 	for len(bq.elements) == 0 {
-		if atomic.LoadInt32(&bq.close) == 1 {
+		if atomic.LoadInt32(&bq.closed) == 1 {
 			bq.cond.L.Unlock()
 			*elements = append(*elements, nil)
 			return
@@ -106,11 +105,11 @@ func (bq *blockQueue) Dequeue(elements *[]interface{}) {
 }
 
 func (bq *blockQueue) Close() {
-	if atomic.CompareAndSwapInt32(&bq.close, 0, 1) {
+	if atomic.CompareAndSwapInt32(&bq.closed, 0, 1) {
 		bq.cond.Signal()
 	}
 }
 
 func (bq *blockQueue) Closed() bool {
-	return atomic.LoadInt32(&bq.close) == 1
+	return atomic.LoadInt32(&bq.closed) == 1
 }
