@@ -128,6 +128,7 @@ func (dq *delayQueue) Dequeue() (interface{}, int64) {
 	var value interface{}
 	var expiration int64
 	var delay int64
+	var isClose bool
 
 ReadLoop:
 	for {
@@ -145,6 +146,7 @@ ReadLoop:
 				select {
 				case <-dq.wakeup:
 					if atomic.LoadInt32(&dq.closed) == 1 {
+						isClose = true
 						break ReadLoop
 					}
 					continue
@@ -155,6 +157,7 @@ ReadLoop:
 				case <-dq.wakeup:
 					timer.Stop()
 					if atomic.LoadInt32(&dq.closed) == 1 {
+						isClose = true
 						break ReadLoop
 					}
 					continue
@@ -170,7 +173,7 @@ ReadLoop:
 		break ReadLoop
 	}
 
-	if atomic.LoadInt32(&dq.closed) == 1 {
+	if isClose {
 		value = nil
 		expiration = -1
 	}
