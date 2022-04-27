@@ -41,8 +41,10 @@ ReadLoop:
 		if found == false {
 			if delay == 0 {
 				if expiration == -1 {
-					isClose = true
-					break ReadLoop
+					if atomic.LoadInt32(&dq.closed) == 1 {
+						isClose = true
+						break ReadLoop
+					}
 				}
 
 				select {
