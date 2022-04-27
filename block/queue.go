@@ -20,13 +20,13 @@ type option struct {
 // Queue 阻塞队列
 type Queue interface {
 	// Enqueue 添加元素到队列
-	// 如果队列已关闭，则返回 false
+	// 如果队列已关闭，则返回 false，否则返回 true
 	Enqueue(value interface{}) bool
 
 	// Dequeue 获取队列中的所有元素
 	// 如果队列中没有元素，则本方法会一直阻塞，直到有元素
-	// 如果队列被关闭，会添加一个 nil 到元素列表的结尾，调用者可以根据是否获取到 nil 元素来判断队列是否关闭
-	Dequeue(*[]interface{})
+	// 如果队列已关闭，则返回 false，否则返回 true
+	Dequeue(*[]interface{}) bool
 
 	// Close 关闭队列
 	Close()
@@ -80,28 +80,29 @@ func (bq *blockQueue) Enqueue(value interface{}) bool {
 	return true
 }
 
-func (bq *blockQueue) Dequeue(elements *[]interface{}) {
+func (bq *blockQueue) Dequeue(elements *[]interface{}) bool {
+	if atomic.LoadInt32(&bq.closed) == 1 {
+		return false
+	}
+
 	bq.cond.L.Lock()
 
 	for len(bq.elements) == 0 {
 		if atomic.LoadInt32(&bq.closed) == 1 {
 			bq.cond.L.Unlock()
-			*elements = append(*elements, nil)
-			return
+			return false
 		}
 		bq.cond.Wait()
 	}
 
 	for _, ele := range bq.elements {
 		*elements = append(*elements, ele)
-		if ele == nil {
-			break
-		}
 	}
 
 	bq.elements = bq.elements[0:0]
 	bq.cond.L.Unlock()
 	bq.cond.Signal()
+	return atomic.LoadInt32(&bq.closed) != 1
 }
 
 func (bq *blockQueue) Close() {

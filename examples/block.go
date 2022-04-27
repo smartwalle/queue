@@ -16,14 +16,14 @@ func main() {
 		for {
 			fmt.Println("read...")
 			items = items[0:0]
-			bQueue.Dequeue(&items)
+			var ok = bQueue.Dequeue(&items)
 
 			for _, item := range items {
-				if item == nil {
-					break ReadLoop
-					return
-				}
 				fmt.Println("Dequeue", item)
+			}
+
+			if !ok {
+				break ReadLoop
 			}
 		}
 
