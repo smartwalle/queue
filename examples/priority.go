@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-	var pQueue = priority.New()
+	var pQueue = priority.New[string]()
 
 	fmt.Println("1", pQueue.Enqueue("1", 1))
 	fmt.Println("2", pQueue.Enqueue("2", 0))
@@ -17,7 +17,7 @@ func main() {
 
 	for {
 		var v, p = pQueue.Dequeue()
-		if v == nil {
+		if p == -1 {
 			break
 		}
 		fmt.Println("Dequeue", v, p)

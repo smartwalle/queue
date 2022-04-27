@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	var dQueue = delay.New(
+	var dQueue = delay.New[string](
 		delay.WithTimeUnit(time.Second),
 		delay.WithTimeProvider(func() int64 {
 			return time.Now().Unix()

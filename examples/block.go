@@ -7,10 +7,10 @@ import (
 )
 
 func main() {
-	var bQueue = block.New()
+	var bQueue = block.New[string]()
 
 	go func() {
-		var items []interface{}
+		var items []string
 
 	ReadLoop:
 		for {

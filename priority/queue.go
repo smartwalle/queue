@@ -15,43 +15,43 @@ type Element interface {
 	updatePriority(int64)
 }
 
-type queueElement struct {
-	value    interface{}
+type queueElement[T any] struct {
+	value    T
 	priority int64
 	index    int
 }
 
-func (ele *queueElement) IsFirst() bool {
+func (ele *queueElement[T]) IsFirst() bool {
 	return ele.index == 0
 }
 
-func (ele *queueElement) getIndex() int {
+func (ele *queueElement[T]) getIndex() int {
 	return ele.index
 }
 
-func (ele *queueElement) updatePriority(priority int64) {
+func (ele *queueElement[T]) updatePriority(priority int64) {
 	ele.priority = priority
 }
 
 // Queue 优先级队列
 // 队列中元素的 priority 值越低，其优先级越高
-type Queue interface {
+type Queue[T any] interface {
 	// Len 获取队列元素数量
 	Len() int
 
 	// Enqueue 添加元素到队列
 	// 参数 priority 的值不能小于 0
-	Enqueue(value interface{}, priority int64) Element
+	Enqueue(value T, priority int64) Element
 
 	// Dequeue 获取队列中的第一个元素及其优先级，并且将该元素从队列中删除
 	// 如果队列中没有元素，则返回 nil 和 -1
-	Dequeue() (interface{}, int64)
+	Dequeue() (T, int64)
 
-	// Peek 获取队列中优先级小于参数 max 的第一个元素，同时返回该元素的优先级和优先级与参数 max 的差值
-	// 如果队列中没有元素，则返回值分别是：nil，-1 和 0
-	// 如果队列中有元素，但是所有元素的优先级都大于参数 max 的值，则返回值分别是：nil，队列中第一个元素的优先级，队列中第一个元素的优先级与 max 的差值
-	// 如果队列中有元素，并且有元素的优先级小于等于参数 max 的值，则返回值分别是：队列中第一个元素，队列中第一个元素的优先级，0。并且将该元素从队列中删除
-	Peek(max int64) (interface{}, int64, int64)
+	// Peek 获取队列中优先级小于参数 max 的第一个元素，同时返回该元素的优先级和优先级与参数 max 的差值，最后一个返回值为是否出队成功
+	// 如果队列中没有元素，则返回值分别是：nil，-1，0 和 false
+	// 如果队列中有元素，但是所有元素的优先级都大于参数 max 的值，则返回值分别是：nil，队列中第一个元素的优先级，队列中第一个元素的优先级与 max 的差值，false
+	// 如果队列中有元素，并且有元素的优先级小于等于参数 max 的值，则返回值分别是：队列中第一个元素，队列中第一个元素的优先级，0。并且将该元素从队列中删除，true
+	Peek(max int64) (T, int64, int64, bool)
 
 	// Update 更新元素的优先级
 	Update(ele Element, priority int64)
@@ -60,55 +60,56 @@ type Queue interface {
 	Remove(ele Element)
 }
 
-type priorityQueue struct {
-	elements []*queueElement
+type priorityQueue[T any] struct {
+	elements []*queueElement[T]
 	pool     *sync.Pool
+	empty    T
 }
 
-func New() Queue {
-	var q = &priorityQueue{}
-	q.elements = make([]*queueElement, 0, 32)
+func New[T any]() Queue[T] {
+	var q = &priorityQueue[T]{}
+	q.elements = make([]*queueElement[T], 0, 32)
 	q.pool = &sync.Pool{
 		New: func() interface{} {
-			return &queueElement{}
+			return &queueElement[T]{}
 		},
 	}
 	return q
 }
 
-func (pq *priorityQueue) Len() int {
+func (pq *priorityQueue[T]) Len() int {
 	return len(pq.elements)
 }
 
-func (pq *priorityQueue) Less(i, j int) bool {
+func (pq *priorityQueue[T]) Less(i, j int) bool {
 	return pq.elements[i].priority < pq.elements[j].priority
 }
 
-func (pq *priorityQueue) Swap(i, j int) {
+func (pq *priorityQueue[T]) Swap(i, j int) {
 	pq.elements[i], pq.elements[j] = pq.elements[j], pq.elements[i]
 	pq.elements[i].index = i
 	pq.elements[j].index = j
 }
 
-func (pq *priorityQueue) Push(x interface{}) {
+func (pq *priorityQueue[T]) Push(x interface{}) {
 	n := len(pq.elements)
 	c := cap(pq.elements)
 	if n+1 > c {
-		npq := make([]*queueElement, n, c*2)
+		npq := make([]*queueElement[T], n, c*2)
 		copy(npq, pq.elements)
 		pq.elements = npq
 	}
 	pq.elements = pq.elements[0 : n+1]
-	ele := x.(*queueElement)
+	ele := x.(*queueElement[T])
 	ele.index = n
 	pq.elements[n] = ele
 }
 
-func (pq *priorityQueue) Pop() interface{} {
+func (pq *priorityQueue[T]) Pop() interface{} {
 	n := len(pq.elements)
 	c := cap(pq.elements)
 	if n < (c/2) && c > 32 {
-		npq := make([]*queueElement, n, c/2)
+		npq := make([]*queueElement[T], n, c/2)
 		copy(npq, pq.elements)
 		pq.elements = npq
 	}
@@ -118,11 +119,11 @@ func (pq *priorityQueue) Pop() interface{} {
 	return ele
 }
 
-func (pq *priorityQueue) Enqueue(value interface{}, priority int64) Element {
+func (pq *priorityQueue[T]) Enqueue(value T, priority int64) Element {
 	if priority < 0 {
 		priority = 0
 	}
-	var ele = pq.pool.Get().(*queueElement)
+	var ele = pq.pool.Get().(*queueElement[T])
 	ele.value = value
 	ele.priority = priority
 
@@ -130,16 +131,17 @@ func (pq *priorityQueue) Enqueue(value interface{}, priority int64) Element {
 	return ele
 }
 
-func (pq *priorityQueue) Dequeue() (interface{}, int64) {
+func (pq *priorityQueue[T]) Dequeue() (T, int64) {
+	var value T
 	if pq.Len() == 0 {
-		return nil, -1
+		return value, -1
 	}
-	var ele = heap.Pop(pq).(*queueElement)
+	var ele = heap.Pop(pq).(*queueElement[T])
 
-	var value = ele.value
+	value = ele.value
 	var priority = ele.priority
 
-	ele.value = nil
+	ele.value = pq.empty
 	ele.priority = -1
 	ele.index = -1
 	pq.pool.Put(ele)
@@ -147,29 +149,30 @@ func (pq *priorityQueue) Dequeue() (interface{}, int64) {
 	return value, priority
 }
 
-func (pq *priorityQueue) Peek(max int64) (interface{}, int64, int64) {
+func (pq *priorityQueue[T]) Peek(max int64) (T, int64, int64, bool) {
+	var value T
 	if pq.Len() == 0 {
-		return nil, -1, 0
+		return value, -1, 0, false
 	}
 
 	var ele = pq.elements[0]
 	if ele.priority > max {
-		return nil, ele.priority, ele.priority - max
+		return value, ele.priority, ele.priority - max, false
 	}
 	heap.Remove(pq, 0)
 
-	var value = ele.value
+	value = ele.value
 	var priority = ele.priority
 
-	ele.value = nil
+	ele.value = pq.empty
 	ele.priority = -1
 	ele.index = -1
 	pq.pool.Put(ele)
 
-	return value, priority, 0
+	return value, priority, 0, true
 }
 
-func (pq *priorityQueue) Update(ele Element, priority int64) {
+func (pq *priorityQueue[T]) Update(ele Element, priority int64) {
 	if ele == nil || ele.getIndex() < 0 {
 		return
 	}
@@ -186,7 +189,7 @@ func (pq *priorityQueue) Update(ele Element, priority int64) {
 	heap.Fix(pq, ele.getIndex())
 }
 
-func (pq *priorityQueue) Remove(ele Element) {
+func (pq *priorityQueue[T]) Remove(ele Element) {
 	if ele == nil || ele.getIndex() < 0 {
 		return
 	}

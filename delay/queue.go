@@ -37,19 +37,19 @@ type option struct {
 }
 
 // Queue 延迟队列
-type Queue interface {
+type Queue[T any] interface {
 	// Len 获取队列元素数量
 	Len() int
 
 	// Enqueue 添加元素到队列
 	// 参数 expiration 的值不能小于 0
 	// 如果队列已关闭，则返回 nil
-	Enqueue(value interface{}, expiration int64) priority.Element
+	Enqueue(value T, expiration int64) priority.Element
 
 	// Dequeue 获取队列中已过期的元素及其过期时间，并且将该元素从队列中删除
 	// 如果队列中没有过期的元素，则本方法会一直阻塞，直到有过期的元素
-	// 如果队列被关闭，则返回 nil 和 -1
-	Dequeue() (interface{}, int64)
+	// 如果队列被关闭，则返回空值和 -1
+	Dequeue() (T, int64)
 
 	// Update 更新元素的过期时间
 	Update(ele priority.Element, expiration int64)
@@ -64,19 +64,19 @@ type Queue interface {
 	Closed() bool
 }
 
-type delayQueue struct {
+type delayQueue[T any] struct {
 	*option
 
 	mu sync.Mutex
-	pq priority.Queue
+	pq priority.Queue[T]
 
 	sleeping int32
 	wakeup   chan struct{}
 	closed   int32
 }
 
-func New(opts ...Option) Queue {
-	var q = &delayQueue{}
+func New[T any](opts ...Option) Queue[T] {
+	var q = &delayQueue[T]{}
 	q.option = &option{
 		unit: time.Second,
 		timer: func() int64 {
@@ -89,16 +89,16 @@ func New(opts ...Option) Queue {
 		}
 	}
 
-	q.pq = priority.New()
+	q.pq = priority.New[T]()
 	q.wakeup = make(chan struct{})
 	return q
 }
 
-func (dq *delayQueue) Len() int {
+func (dq *delayQueue[T]) Len() int {
 	return dq.pq.Len()
 }
 
-func (dq *delayQueue) Enqueue(value interface{}, expiration int64) priority.Element {
+func (dq *delayQueue[T]) Enqueue(value T, expiration int64) priority.Element {
 	if atomic.LoadInt32(&dq.closed) == 1 {
 		return nil
 	}
@@ -115,10 +115,11 @@ func (dq *delayQueue) Enqueue(value interface{}, expiration int64) priority.Elem
 	return ele
 }
 
-func (dq *delayQueue) Dequeue() (interface{}, int64) {
-	var value interface{}
+func (dq *delayQueue[T]) Dequeue() (T, int64) {
+	var value T
 	var expiration int64
 	var delay int64
+	var found bool
 	var isClose bool
 
 ReadLoop:
@@ -126,13 +127,13 @@ ReadLoop:
 		var nTime = dq.option.timer()
 
 		dq.mu.Lock()
-		value, expiration, delay = dq.pq.Peek(nTime)
-		if value == nil {
+		value, expiration, delay, found = dq.pq.Peek(nTime)
+		if found == false {
 			atomic.StoreInt32(&dq.sleeping, 1)
 		}
 		dq.mu.Unlock()
 
-		if value == nil {
+		if found == false {
 			if delay == 0 {
 				select {
 				case <-dq.wakeup:
@@ -165,7 +166,8 @@ ReadLoop:
 	}
 
 	if isClose {
-		value = nil
+		var empty T
+		value = empty
 		expiration = -1
 	}
 
@@ -173,7 +175,7 @@ ReadLoop:
 	return value, expiration
 }
 
-func (dq *delayQueue) Update(ele priority.Element, expiration int64) {
+func (dq *delayQueue[T]) Update(ele priority.Element, expiration int64) {
 	if atomic.LoadInt32(&dq.closed) == 1 {
 		return
 	}
@@ -188,7 +190,7 @@ func (dq *delayQueue) Update(ele priority.Element, expiration int64) {
 		}
 	}
 }
-func (dq *delayQueue) Remove(ele priority.Element) {
+func (dq *delayQueue[T]) Remove(ele priority.Element) {
 	if atomic.LoadInt32(&dq.closed) == 1 {
 		return
 	}
@@ -208,12 +210,12 @@ func (dq *delayQueue) Remove(ele priority.Element) {
 	}
 }
 
-func (dq *delayQueue) Close() {
+func (dq *delayQueue[T]) Close() {
 	if atomic.CompareAndSwapInt32(&dq.closed, 0, 1) {
 		dq.wakeup <- struct{}{}
 	}
 }
 
-func (dq *delayQueue) Closed() bool {
+func (dq *delayQueue[T]) Closed() bool {
 	return atomic.LoadInt32(&dq.closed) == 1
 }

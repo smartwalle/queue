@@ -18,15 +18,15 @@ type option struct {
 }
 
 // Queue 阻塞队列
-type Queue interface {
+type Queue[T any] interface {
 	// Enqueue 添加元素到队列
 	// 如果队列已关闭，则返回 false，否则返回 true
-	Enqueue(value interface{}) bool
+	Enqueue(value T) bool
 
 	// Dequeue 获取队列中的所有元素
 	// 如果队列中没有元素，则本方法会一直阻塞，直到有元素
 	// 如果队列已关闭，则返回 false，否则返回 true
-	Dequeue(*[]interface{}) bool
+	Dequeue(*[]T) bool
 
 	// Close 关闭队列
 	Close()
@@ -35,27 +35,27 @@ type Queue interface {
 	Closed() bool
 }
 
-type blockQueue struct {
+type blockQueue[T any] struct {
 	*option
-	elements []interface{}
+	elements []T
 	cond     *sync.Cond
 	closed   int32
 }
 
-func New(opts ...Option) Queue {
-	var q = &blockQueue{}
+func New[T any](opts ...Option) Queue[T] {
+	var q = &blockQueue[T]{}
 	q.option = &option{}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(q.option)
 		}
 	}
-	q.elements = make([]interface{}, 0, 32)
+	q.elements = make([]T, 0, 32)
 	q.cond = sync.NewCond(&sync.Mutex{})
 	return q
 }
 
-func (bq *blockQueue) Enqueue(value interface{}) bool {
+func (bq *blockQueue[T]) Enqueue(value T) bool {
 	if atomic.LoadInt32(&bq.closed) == 1 {
 		return false
 	}
@@ -68,7 +68,7 @@ func (bq *blockQueue) Enqueue(value interface{}) bool {
 	n := len(bq.elements)
 	c := cap(bq.elements)
 	if n+1 > c {
-		npq := make([]interface{}, n, c*2)
+		npq := make([]T, n, c*2)
 		copy(npq, bq.elements)
 		bq.elements = npq
 	}
@@ -80,7 +80,7 @@ func (bq *blockQueue) Enqueue(value interface{}) bool {
 	return true
 }
 
-func (bq *blockQueue) Dequeue(elements *[]interface{}) bool {
+func (bq *blockQueue[T]) Dequeue(elements *[]T) bool {
 	if atomic.LoadInt32(&bq.closed) == 1 {
 		return false
 	}
@@ -105,12 +105,12 @@ func (bq *blockQueue) Dequeue(elements *[]interface{}) bool {
 	return atomic.LoadInt32(&bq.closed) != 1
 }
 
-func (bq *blockQueue) Close() {
+func (bq *blockQueue[T]) Close() {
 	if atomic.CompareAndSwapInt32(&bq.closed, 0, 1) {
 		bq.cond.Signal()
 	}
 }
 
-func (bq *blockQueue) Closed() bool {
+func (bq *blockQueue[T]) Closed() bool {
 	return atomic.LoadInt32(&bq.closed) == 1
 }

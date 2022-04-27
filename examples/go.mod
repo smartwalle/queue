@@ -8,4 +8,4 @@ replace (
 	github.com/smartwalle/queue => ../
 )
 
-go 1.12
+go 1.18
