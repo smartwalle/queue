@@ -16,7 +16,39 @@ func BenchmarkDelayQueue_Enqueue(b *testing.B) {
 	b.Log(b.N)
 }
 
-func TestDelayQueue_DefaultMode(t *testing.T) {
+func BenchmarkDelayQueue_DefaultModeDequeue(b *testing.B) {
+	var q = delay.New[int](delay.WithDefaultMode())
+	var now = time.Now().Unix()
+	for i := 0; i < b.N; i++ {
+		q.Enqueue(i, now)
+	}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		if _, expiration := q.Dequeue(); expiration == -1 {
+			b.Fatal("Dequeue 异常")
+		}
+	}
+}
+
+func BenchmarkDelayQueue_ReadAllModeDequeue(b *testing.B) {
+	var q = delay.New[int](delay.WithReadAllMode())
+	var now = time.Now().Unix()
+	for i := 0; i < b.N; i++ {
+		q.Enqueue(i, now)
+	}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		if _, expiration := q.Dequeue(); expiration == -1 {
+			b.Fatal("Dequeue 异常")
+		}
+	}
+}
+
+func TestDelayQueue_DefaultModeClose1(t *testing.T) {
 	var q = delay.New[int](delay.WithDefaultMode())
 
 	go func() {
@@ -43,7 +75,7 @@ func TestDelayQueue_DefaultMode(t *testing.T) {
 	}
 }
 
-func TestDelayQueue_ReadAllMode(t *testing.T) {
+func TestDelayQueue_ReadAllModeClose1(t *testing.T) {
 	var q = delay.New[int](delay.WithReadAllMode())
 
 	go func() {
@@ -70,7 +102,7 @@ func TestDelayQueue_ReadAllMode(t *testing.T) {
 	}
 }
 
-func TestDelayQueue_DefaultModeClose(t *testing.T) {
+func TestDelayQueue_DefaultModeClose2(t *testing.T) {
 	var q = delay.New[int](delay.WithDefaultMode())
 
 	var now = time.Now().Unix()
@@ -89,7 +121,7 @@ func TestDelayQueue_DefaultModeClose(t *testing.T) {
 	}
 }
 
-func TestDelayQueue_ReadAllModeClose(t *testing.T) {
+func TestDelayQueue_ReadAllModeClose2(t *testing.T) {
 	var q = delay.New[int](delay.WithReadAllMode())
 
 	var now = time.Now().Unix()
