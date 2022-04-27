@@ -73,6 +73,7 @@ type delayQueue[T any] struct {
 	sleeping int32
 	wakeup   chan struct{}
 	closed   int32
+	empty    T
 }
 
 func New[T any](opts ...Option) Queue[T] {
@@ -124,6 +125,11 @@ func (dq *delayQueue[T]) Dequeue() (T, int64) {
 
 ReadLoop:
 	for {
+		if atomic.LoadInt32(&dq.closed) == 1 {
+			isClose = true
+			break ReadLoop
+		}
+
 		var nTime = dq.option.timer()
 
 		dq.mu.Lock()
@@ -137,10 +143,6 @@ ReadLoop:
 			if delay == 0 {
 				select {
 				case <-dq.wakeup:
-					if atomic.LoadInt32(&dq.closed) == 1 {
-						isClose = true
-						break ReadLoop
-					}
 					continue
 				}
 			} else if delay > 0 {
@@ -148,10 +150,6 @@ ReadLoop:
 				select {
 				case <-dq.wakeup:
 					timer.Stop()
-					if atomic.LoadInt32(&dq.closed) == 1 {
-						isClose = true
-						break ReadLoop
-					}
 					continue
 				case <-timer.C:
 					if atomic.SwapInt32(&dq.sleeping, 0) == 0 {
@@ -166,8 +164,7 @@ ReadLoop:
 	}
 
 	if isClose {
-		var empty T
-		value = empty
+		value = dq.empty
 		expiration = -1
 	}
 
