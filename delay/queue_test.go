@@ -12,8 +12,6 @@ func BenchmarkDelayQueue_Enqueue(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		q.Enqueue(i, int64(i))
 	}
-
-	b.Log(b.N)
 }
 
 func BenchmarkDelayQueue_DefaultModeDequeue(b *testing.B) {
