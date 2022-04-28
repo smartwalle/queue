@@ -27,6 +27,12 @@ ReadLoop:
 		var nTime = dq.option.timer()
 
 		dq.mu.Lock()
+
+		if dq.pq.Len() == 0 && atomic.LoadInt32(&dq.closed) == 1 {
+			isClose = true
+			break ReadLoop
+		}
+
 		value, expiration, delay, found = dq.pq.Peek(nTime)
 		if found == false {
 			atomic.StoreInt32(&dq.sleeping, 1)
@@ -40,13 +46,6 @@ ReadLoop:
 
 		if found == false {
 			if delay == 0 {
-				if expiration == -1 {
-					if atomic.LoadInt32(&dq.closed) == 1 {
-						isClose = true
-						break ReadLoop
-					}
-				}
-
 				select {
 				case <-dq.wakeup:
 					continue
