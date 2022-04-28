@@ -4,7 +4,6 @@ package priority
 
 import (
 	"container/heap"
-	"sync"
 )
 
 type Element interface {
@@ -62,18 +61,18 @@ type Queue[T any] interface {
 
 type priorityQueue[T any] struct {
 	elements []*queueElement[T]
-	pool     *sync.Pool
-	empty    T
+	//pool     *sync.Pool
+	empty T
 }
 
 func New[T any]() Queue[T] {
 	var q = &priorityQueue[T]{}
 	q.elements = make([]*queueElement[T], 0, 32)
-	q.pool = &sync.Pool{
-		New: func() interface{} {
-			return &queueElement[T]{}
-		},
-	}
+	//q.pool = &sync.Pool{
+	//	New: func() interface{} {
+	//		return &queueElement[T]{}
+	//	},
+	//}
 	return q
 }
 
@@ -123,7 +122,8 @@ func (pq *priorityQueue[T]) Enqueue(value T, priority int64) Element {
 	if priority < 0 {
 		priority = 0
 	}
-	var ele = pq.pool.Get().(*queueElement[T])
+	//var ele = pq.pool.Get().(*queueElement[T])
+	var ele = &queueElement[T]{}
 	ele.value = value
 	ele.priority = priority
 
@@ -144,7 +144,7 @@ func (pq *priorityQueue[T]) Dequeue() (T, int64) {
 	ele.value = pq.empty
 	ele.priority = -1
 	ele.index = -1
-	pq.pool.Put(ele)
+	//pq.pool.Put(ele)
 
 	return value, priority
 }
@@ -167,7 +167,7 @@ func (pq *priorityQueue[T]) Peek(max int64) (T, int64, int64, bool) {
 	ele.value = pq.empty
 	ele.priority = -1
 	ele.index = -1
-	pq.pool.Put(ele)
+	//pq.pool.Put(ele)
 
 	return value, priority, 0, true
 }
