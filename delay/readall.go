@@ -88,5 +88,6 @@ func (m *readAllMode[T]) close(dq *delayQueue[T]) {
 
 	if m.w != nil {
 		m.w.Wait()
+		m.w = nil
 	}
 }
