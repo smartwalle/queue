@@ -7,8 +7,10 @@ import (
 )
 
 type Element interface {
+	// IsFirst 获取该元素是否为队列的第一个元素
 	IsFirst() bool
 
+	// IsValid 获取该元素是否还在队列中
 	IsValid() bool
 
 	getIndex() int
