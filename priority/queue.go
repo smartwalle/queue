@@ -9,6 +9,8 @@ import (
 type Element interface {
 	IsFirst() bool
 
+	IsValid() bool
+
 	getIndex() int
 
 	updatePriority(int64)
@@ -22,6 +24,10 @@ type queueElement[T any] struct {
 
 func (ele *queueElement[T]) IsFirst() bool {
 	return ele.index == 0
+}
+
+func (ele *queueElement[T]) IsValid() bool {
+	return ele.priority != -1 && ele.index != -1
 }
 
 func (ele *queueElement[T]) getIndex() int {
