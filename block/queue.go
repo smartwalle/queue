@@ -107,7 +107,7 @@ func (bq *blockQueue[T]) Dequeue(elements *[]T) bool {
 
 func (bq *blockQueue[T]) Close() {
 	if atomic.CompareAndSwapInt32(&bq.closed, 0, 1) {
-		bq.cond.Signal()
+		bq.cond.Broadcast()
 	}
 }
 
