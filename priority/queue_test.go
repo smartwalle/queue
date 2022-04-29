@@ -66,6 +66,23 @@ func BenchmarkPriorityQueue_Peek(b *testing.B) {
 	}
 }
 
+func BenchmarkPriorityQueue_Remove(b *testing.B) {
+	var q = priority.New[int]()
+
+	var r = rand.NewSource(time.Now().Unix())
+	var elements = make([]priority.Element, b.N)
+	for i := 0; i < b.N; i++ {
+		var p = r.Int63()
+		var ele = q.Enqueue(i, p)
+		elements[i] = ele
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		q.Remove(elements[i])
+	}
+}
+
 func TestPriorityQueue_Dequeue2(t *testing.T) {
 	var q = priority.New[int]()
 

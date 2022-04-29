@@ -2,6 +2,8 @@ package delay_test
 
 import (
 	"github.com/smartwalle/queue/delay"
+	"github.com/smartwalle/queue/priority"
+	"math/rand"
 	"testing"
 	"time"
 )
@@ -43,6 +45,23 @@ func BenchmarkDelayQueue_ReadAllModeDequeue(b *testing.B) {
 		if _, expiration := q.Dequeue(); expiration == -1 {
 			b.Fatal("Dequeue 异常")
 		}
+	}
+}
+
+func BenchmarkDelayQueue_Remove(b *testing.B) {
+	var q = delay.New[int]()
+
+	var r = rand.NewSource(time.Now().Unix())
+	var elements = make([]priority.Element, b.N)
+	for i := 0; i < b.N; i++ {
+		var p = r.Int63()
+		var ele = q.Enqueue(i, p)
+		elements[i] = ele
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		q.Remove(elements[i])
 	}
 }
 
