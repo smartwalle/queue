@@ -95,7 +95,11 @@ func TestDelayQueue_DefaultModeClose1(t *testing.T) {
 func TestDelayQueue_ReadAllModeClose1(t *testing.T) {
 	var q = delay.New[int](delay.WithReadAllMode())
 
+	var done = make(chan struct{})
 	go func() {
+		defer func() {
+			close(done)
+		}()
 		for {
 			var value, expiration = q.Dequeue()
 			if expiration == -1 {
@@ -112,6 +116,10 @@ func TestDelayQueue_ReadAllModeClose1(t *testing.T) {
 
 	// ReadAllMode：调用 Close 方法后会等待所有已入队的消息出队，所以所有的消息都会被消费
 	q.Close()
+
+	select {
+	case <-done:
+	}
 
 	// Close 方法会阻塞，所以时间差基本是最后一条消息的延迟时间
 	if time.Now().Unix() < now+3 {

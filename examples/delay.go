@@ -8,13 +8,18 @@ import (
 
 func main() {
 	var dQueue = delay.New[string](
+		delay.WithReadAllMode(),
 		delay.WithTimeUnit(time.Second),
 		delay.WithTimeProvider(func() int64 {
 			return time.Now().Unix()
 		}),
 	)
 
+	var done = make(chan struct{})
 	go func() {
+		defer func() {
+			close(done)
+		}()
 		for {
 			var v, p = dQueue.Dequeue()
 			fmt.Println("Dequeue", time.Now().Unix(), v, p)
@@ -42,5 +47,8 @@ func main() {
 	time.Sleep(time.Second * 1)
 	dQueue.Close()
 	dQueue.Enqueue("无效", time.Now().Add(time.Second*1).Unix())
-	time.Sleep(time.Second * 2)
+
+	select {
+	case <-done:
+	}
 }
