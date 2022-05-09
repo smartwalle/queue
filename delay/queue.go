@@ -128,7 +128,7 @@ func (dq *delayQueue[T]) Enqueue(value T, expiration int64) priority.Element {
 	var ele = dq.pq.Enqueue(value, expiration)
 	dq.mu.Unlock()
 
-	if ele != nil && ele.IsFirst() {
+	if ele != nil && ele.First() {
 		if atomic.CompareAndSwapInt32(&dq.sleeping, 1, 0) {
 			dq.wakeup <- struct{}{}
 		}
@@ -149,7 +149,7 @@ func (dq *delayQueue[T]) Update(ele priority.Element, expiration int64) {
 	dq.pq.Update(ele, expiration)
 	dq.mu.Unlock()
 
-	if ele.IsFirst() {
+	if ele.First() {
 		if atomic.CompareAndSwapInt32(&dq.sleeping, 1, 0) {
 			dq.wakeup <- struct{}{}
 		}
@@ -162,7 +162,7 @@ func (dq *delayQueue[T]) Remove(ele priority.Element) {
 
 	var isFirst = false
 	if ele != nil {
-		isFirst = ele.IsFirst()
+		isFirst = ele.First()
 	}
 	dq.mu.Lock()
 	dq.pq.Remove(ele)

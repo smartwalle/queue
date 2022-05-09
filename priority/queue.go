@@ -7,11 +7,11 @@ import (
 )
 
 type Element interface {
-	// IsFirst 获取该元素是否为队列的第一个元素
-	IsFirst() bool
+	// First 获取该元素是否为队列的第一个元素
+	First() bool
 
-	// IsValid 获取该元素是否还在队列中
-	IsValid() bool
+	// Valid 获取该元素是否还在队列中
+	Valid() bool
 
 	getIndex() int
 
@@ -24,11 +24,11 @@ type queueElement[T any] struct {
 	index    int
 }
 
-func (ele *queueElement[T]) IsFirst() bool {
+func (ele *queueElement[T]) First() bool {
 	return ele.index == 0
 }
 
-func (ele *queueElement[T]) IsValid() bool {
+func (ele *queueElement[T]) Valid() bool {
 	return ele.priority != -1 && ele.index != -1
 }
 
