@@ -89,8 +89,10 @@ func (bq *blockQueue[T]) Dequeue(elements *[]T) bool {
 
 	for len(bq.elements) == 0 {
 		if atomic.LoadInt32(&bq.closed) == 1 {
-			bq.cond.L.Unlock()
-			return false
+			//bq.cond.L.Unlock()
+			//return false
+			// 修改为 break
+			break
 		}
 		bq.cond.Wait()
 	}
