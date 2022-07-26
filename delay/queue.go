@@ -155,6 +155,7 @@ func (dq *delayQueue[T]) Update(ele priority.Element, expiration int64) {
 		}
 	}
 }
+
 func (dq *delayQueue[T]) Remove(ele priority.Element) {
 	if atomic.LoadInt32(&dq.closed) == 1 {
 		return
