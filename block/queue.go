@@ -5,15 +5,15 @@ import (
 	"sync/atomic"
 )
 
-type Option func(opt *option)
+type Option func(opts *options)
 
 func WithMaxSize(max int) Option {
-	return func(opt *option) {
-		opt.max = max
+	return func(opts *options) {
+		opts.max = max
 	}
 }
 
-type option struct {
+type options struct {
 	max int
 }
 
@@ -36,7 +36,7 @@ type Queue[T any] interface {
 }
 
 type blockQueue[T any] struct {
-	*option
+	*options
 	elements []T
 	cond     *sync.Cond
 	closed   int32
@@ -44,10 +44,10 @@ type blockQueue[T any] struct {
 
 func New[T any](opts ...Option) Queue[T] {
 	var q = &blockQueue[T]{}
-	q.option = &option{}
+	q.options = &options{}
 	for _, opt := range opts {
 		if opt != nil {
-			opt(q.option)
+			opt(q.options)
 		}
 	}
 	q.elements = make([]T, 0, 32)
@@ -61,7 +61,7 @@ func (bq *blockQueue[T]) Enqueue(value T) bool {
 	}
 
 	bq.cond.L.Lock()
-	if bq.option.max > 0 && len(bq.elements)+1 > bq.option.max {
+	if bq.options.max > 0 && len(bq.elements)+1 > bq.options.max {
 		bq.cond.Wait()
 	}
 

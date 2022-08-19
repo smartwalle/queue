@@ -26,7 +26,7 @@ ReadLoop:
 			break ReadLoop
 		}
 
-		var nTime = dq.option.timer()
+		var nTime = dq.options.timer()
 
 		dq.mu.Lock()
 		value, expiration, delay, found = dq.pq.Peek(nTime)
@@ -42,7 +42,7 @@ ReadLoop:
 					continue
 				}
 			} else if delay > 0 {
-				var timer = time.NewTimer(time.Duration(delay) * dq.option.unit)
+				var timer = time.NewTimer(time.Duration(delay) * dq.options.unit)
 				select {
 				case <-dq.wakeup:
 					timer.Stop()

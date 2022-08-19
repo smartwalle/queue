@@ -7,47 +7,47 @@ import (
 	"time"
 )
 
-type Option func(opt *option)
+type Option func(opts *options)
 
 // WithTimeUnit 用于设定队列时间单位
 func WithTimeUnit(unit time.Duration) Option {
-	return func(opt *option) {
+	return func(opts *options) {
 		if unit <= 0 {
 			unit = time.Second
 		}
-		opt.unit = unit
+		opts.unit = unit
 	}
 }
 
 // WithTimeProvider 用于设定队列的时间源
 func WithTimeProvider(f func() int64) Option {
-	return func(opt *option) {
+	return func(opts *options) {
 		if f == nil {
 			f = func() int64 {
 				return time.Now().Unix()
 			}
 		}
-		opt.timer = f
+		opts.timer = f
 	}
 }
 
 // WithDefaultMode 默认模式
 // 调用队列的 Close 方法后，队列会立刻关闭，未出队的消息将被丢弃
 func WithDefaultMode() Option {
-	return func(opt *option) {
-		opt.mType = kModeTypeDefault
+	return func(opts *options) {
+		opts.mType = kModeTypeDefault
 	}
 }
 
 // WithReadAllMode 全读模式
 // 调用队列的 Close 方法后，队列会等到所有的消息都出队后才关闭，但是不能再往队列添加消息或执行其它更新操作
 func WithReadAllMode() Option {
-	return func(opt *option) {
-		opt.mType = kModeTypeReadAll
+	return func(opts *options) {
+		opts.mType = kModeTypeReadAll
 	}
 }
 
-type option struct {
+type options struct {
 	mType int
 	unit  time.Duration
 	timer func() int64
@@ -82,7 +82,7 @@ type Queue[T any] interface {
 }
 
 type delayQueue[T any] struct {
-	*option
+	*options
 	m  mode[T]
 	mu *sync.Mutex
 	pq priority.Queue[T]
@@ -95,7 +95,7 @@ type delayQueue[T any] struct {
 
 func New[T any](opts ...Option) Queue[T] {
 	var q = &delayQueue[T]{}
-	q.option = &option{
+	q.options = &options{
 		unit: time.Second,
 		timer: func() int64 {
 			return time.Now().Unix()
@@ -103,10 +103,10 @@ func New[T any](opts ...Option) Queue[T] {
 	}
 	for _, opt := range opts {
 		if opt != nil {
-			opt(q.option)
+			opt(q.options)
 		}
 	}
-	q.m = getMode[T](q.option.mType)
+	q.m = getMode[T](q.options.mType)
 	q.mu = &sync.Mutex{}
 	q.pq = priority.New[T]()
 	q.wakeup = make(chan struct{})

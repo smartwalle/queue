@@ -24,7 +24,7 @@ func (m *readAllMode[T]) dequeue(dq *delayQueue[T]) (T, int64) {
 
 ReadLoop:
 	for {
-		var nTime = dq.option.timer()
+		var nTime = dq.options.timer()
 
 		dq.mu.Lock()
 
@@ -51,7 +51,7 @@ ReadLoop:
 					continue
 				}
 			} else if delay > 0 {
-				var timer = time.NewTimer(time.Duration(delay) * dq.option.unit)
+				var timer = time.NewTimer(time.Duration(delay) * dq.options.unit)
 				select {
 				case <-dq.wakeup:
 					timer.Stop()
