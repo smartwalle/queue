@@ -36,9 +36,9 @@ type Queue[T any] interface {
 }
 
 type blockQueue[T any] struct {
-	*options
-	elements []T
+	options  *options
 	cond     *sync.Cond
+	elements []T
 	closed   int32
 }
 

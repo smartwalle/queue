@@ -48,9 +48,9 @@ func WithReadAllMode() Option {
 }
 
 type options struct {
+	timer func() int64
 	mType int
 	unit  time.Duration
-	timer func() int64
 }
 
 // Queue 延迟队列
@@ -82,15 +82,14 @@ type Queue[T any] interface {
 }
 
 type delayQueue[T any] struct {
-	*options
-	m  mode[T]
-	mu *sync.Mutex
-	pq priority.Queue[T]
-
-	sleeping int32
-	wakeup   chan struct{}
-	closed   int32
+	m        mode[T]
+	pq       priority.Queue[T]
 	empty    T
+	options  *options
+	mu       *sync.Mutex
+	wakeup   chan struct{}
+	sleeping int32
+	closed   int32
 }
 
 func New[T any](opts ...Option) Queue[T] {

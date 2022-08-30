@@ -69,9 +69,8 @@ type Queue[T any] interface {
 }
 
 type priorityQueue[T any] struct {
+	empty    T
 	elements []*queueElement[T]
-	//pool     *sync.Pool
-	empty T
 }
 
 func New[T any]() Queue[T] {
