@@ -86,8 +86,8 @@ type delayQueue[T any] struct {
 	pq       priority.Queue[T]
 	empty    T
 	options  *options
-	mu       *sync.Mutex
 	wakeup   chan struct{}
+	mu       sync.Mutex
 	sleeping int32
 	closed   int32
 }
@@ -106,7 +106,6 @@ func New[T any](opts ...Option) Queue[T] {
 		}
 	}
 	q.m = getMode[T](q.options.mType)
-	q.mu = &sync.Mutex{}
 	q.pq = priority.New[T]()
 	q.wakeup = make(chan struct{})
 	return q
