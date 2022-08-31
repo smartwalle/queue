@@ -12,7 +12,8 @@ func newReadAllMode[T any]() *readAllMode[T] {
 }
 
 type readAllMode[T any] struct {
-	w *sync.WaitGroup
+	closed bool
+	w      sync.WaitGroup
 }
 
 func (m *readAllMode[T]) dequeue(dq *delayQueue[T]) (T, int64) {
@@ -38,7 +39,7 @@ ReadLoop:
 			atomic.StoreInt32(&dq.sleeping, 1)
 		}
 
-		if found && m.w != nil {
+		if found && m.closed {
 			m.w.Done()
 		}
 
@@ -79,15 +80,17 @@ ReadLoop:
 
 func (m *readAllMode[T]) close(dq *delayQueue[T]) {
 	dq.mu.Lock()
+	if m.closed {
+		dq.mu.Unlock()
+		return
+	}
+
+	m.closed = true
 	var c = dq.pq.Len()
 	if c > 0 {
-		m.w = &sync.WaitGroup{}
 		m.w.Add(c)
 	}
 	dq.mu.Unlock()
 
-	if m.w != nil {
-		m.w.Wait()
-		m.w = nil
-	}
+	m.w.Wait()
 }
