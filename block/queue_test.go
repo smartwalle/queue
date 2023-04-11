@@ -1,7 +1,9 @@
 package block_test
 
 import (
+	"fmt"
 	"github.com/smartwalle/queue/block"
+	"sync"
 	"testing"
 )
 
@@ -11,6 +13,34 @@ func BenchmarkBlockQueue_Enqueue(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		q.Enqueue(i)
 	}
+}
 
-	b.Log(b.N)
+func BenchmarkBlockQueue_EnqueueDequeue(b *testing.B) {
+	var q = block.New[int]()
+	var wg = &sync.WaitGroup{}
+	go func() {
+		var items []int
+		for {
+			items = items[0:0]
+			var ok = q.Dequeue(&items)
+
+			if len(items) > 0 && ok {
+				for range items {
+					wg.Done()
+				}
+			}
+
+			if !ok {
+				fmt.Println(ok)
+				break
+			}
+		}
+	}()
+
+	for i := 0; i < b.N; i++ {
+		wg.Add(1)
+		q.Enqueue(i)
+	}
+	wg.Wait()
+	q.Close()
 }
