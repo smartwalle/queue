@@ -26,7 +26,7 @@ ReadLoop:
 			break ReadLoop
 		}
 
-		var nTime = dq.options.timer()
+		var nTime = dq.options.clock()
 
 		dq.mu.Lock()
 		value, expiration, delay, found = dq.pq.Peek(nTime)

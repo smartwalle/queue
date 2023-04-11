@@ -16,6 +16,24 @@ func BenchmarkDelayQueue_Enqueue(b *testing.B) {
 	}
 }
 
+func BenchmarkDelayQueue_EnqueueDequeue(b *testing.B) {
+	var q = delay.New[int](delay.WithReadAllMode())
+	go func() {
+		var next int64
+		for {
+			_, next = q.Dequeue()
+			if next < 0 {
+				break
+			}
+		}
+	}()
+
+	for i := 0; i < b.N; i++ {
+		q.Enqueue(i, 1)
+	}
+	q.Close()
+}
+
 func BenchmarkDelayQueue_DefaultModeDequeue(b *testing.B) {
 	var q = delay.New[int](delay.WithDefaultMode())
 	var now = time.Now().Unix()

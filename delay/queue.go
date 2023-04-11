@@ -27,7 +27,7 @@ func WithTimeProvider(f func() int64) Option {
 				return time.Now().Unix()
 			}
 		}
-		opts.timer = f
+		opts.clock = f
 	}
 }
 
@@ -48,7 +48,7 @@ func WithReadAllMode() Option {
 }
 
 type options struct {
-	timer func() int64
+	clock func() int64
 	mType int
 	unit  time.Duration
 }
@@ -96,7 +96,7 @@ func New[T any](opts ...Option) Queue[T] {
 	var q = &delayQueue[T]{}
 	q.options = &options{
 		unit: time.Second,
-		timer: func() int64 {
+		clock: func() int64 {
 			return time.Now().Unix()
 		},
 	}

@@ -1,7 +1,6 @@
 package block_test
 
 import (
-	"fmt"
 	"github.com/smartwalle/queue/block"
 	"sync"
 	"testing"
@@ -24,14 +23,13 @@ func BenchmarkBlockQueue_EnqueueDequeue(b *testing.B) {
 			items = items[0:0]
 			var ok = q.Dequeue(&items)
 
-			if len(items) > 0 && ok {
+			if len(items) > 0 {
 				for range items {
 					wg.Done()
 				}
 			}
 
 			if !ok {
-				fmt.Println(ok)
 				break
 			}
 		}

@@ -25,7 +25,7 @@ func (m *readAllMode[T]) dequeue(dq *delayQueue[T]) (T, int64) {
 
 ReadLoop:
 	for {
-		var nTime = dq.options.timer()
+		var nTime = dq.options.clock()
 
 		dq.mu.Lock()
 
