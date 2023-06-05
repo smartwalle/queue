@@ -31,6 +31,7 @@ ReadLoop:
 
 		if dq.pq.Len() == 0 && atomic.LoadInt32(&dq.closed) == 1 {
 			isClose = true
+			dq.mu.Unlock()
 			break ReadLoop
 		}
 
