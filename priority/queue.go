@@ -1,7 +1,6 @@
 package priority
 
-// This is a fork of https://github.com/nsqio/nsq/blob/master/internal/pqueue/pqueue.go written in a
-// more extendable way
+// This is a fork of https://github.com/nsqio/nsq/blob/master/internal/pqueue/pqueue.go
 
 import (
 	"container/heap"
