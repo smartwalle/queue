@@ -8,7 +8,7 @@ import (
 
 func main() {
 	var dQueue = delay.New[string](
-		delay.WithReadAllMode(),
+		delay.WithDrainAll(),
 		delay.WithTimeUnit(time.Second),
 		delay.WithTimeProvider(func() int64 {
 			return time.Now().Unix()

@@ -31,26 +31,17 @@ func WithTimeProvider(f func() int64) Option {
 	}
 }
 
-// WithDefaultMode 默认模式
-// 调用队列的 Close 方法后，队列会立刻关闭，未出队的消息将被丢弃
-func WithDefaultMode() Option {
+// WithDrainAll 调用队列的 Close 方法后，队列会等到所有的消息都出队后才关闭，但是不能再往队列添加消息或执行其它更新操作
+func WithDrainAll() Option {
 	return func(opts *options) {
-		opts.mType = kModeTypeDefault
-	}
-}
-
-// WithReadAllMode 全读模式
-// 调用队列的 Close 方法后，队列会等到所有的消息都出队后才关闭，但是不能再往队列添加消息或执行其它更新操作
-func WithReadAllMode() Option {
-	return func(opts *options) {
-		opts.mType = kModeTypeReadAll
+		opts.drainAll = true
 	}
 }
 
 type options struct {
-	clock func() int64
-	mType int
-	unit  time.Duration
+	clock    func() int64
+	unit     time.Duration
+	drainAll bool
 }
 
 // Queue 延迟队列
@@ -82,14 +73,15 @@ type Queue[T any] interface {
 }
 
 type delayQueue[T any] struct {
-	m        mode[T]
 	pq       priority.Queue[T]
 	empty    T
 	options  *options
 	wakeup   chan struct{}
 	mu       sync.Mutex
+	w        sync.WaitGroup
+	timer    *time.Timer
 	sleeping int32
-	closed   int32
+	closed   bool
 }
 
 func New[T any](opts ...Option) Queue[T] {
@@ -105,7 +97,6 @@ func New[T any](opts ...Option) Queue[T] {
 			opt(q.options)
 		}
 	}
-	q.m = getMode[T](q.options.mType)
 	q.pq = priority.New[T]()
 	q.wakeup = make(chan struct{})
 	return q
@@ -118,11 +109,12 @@ func (dq *delayQueue[T]) Len() int {
 }
 
 func (dq *delayQueue[T]) Enqueue(value T, expiration int64) priority.Element {
-	if atomic.LoadInt32(&dq.closed) == 1 {
+	dq.mu.Lock()
+	if dq.closed {
+		dq.mu.Unlock()
 		return nil
 	}
 
-	dq.mu.Lock()
 	var ele = dq.pq.Enqueue(value, expiration)
 	dq.mu.Unlock()
 
@@ -135,15 +127,80 @@ func (dq *delayQueue[T]) Enqueue(value T, expiration int64) priority.Element {
 }
 
 func (dq *delayQueue[T]) Dequeue() (T, int64) {
-	return dq.m.dequeue(dq)
+	var value T
+	var expiration int64
+	var delay int64
+	var found bool
+	var done bool
+
+ReadLoop:
+	for {
+		dq.mu.Lock()
+
+		if dq.closed && (!dq.options.drainAll || dq.pq.Len() == 0) {
+			done = true
+			dq.mu.Unlock()
+			break ReadLoop
+		}
+
+		var nTime = dq.options.clock()
+		value, expiration, delay, found = dq.pq.Peek(nTime)
+		if !found {
+			atomic.StoreInt32(&dq.sleeping, 1)
+		}
+
+		if found && dq.closed {
+			dq.w.Done()
+		}
+
+		dq.mu.Unlock()
+
+		if !found {
+			if delay == 0 {
+				select {
+				case <-dq.wakeup:
+					continue
+				}
+			} else if delay > 0 {
+				if dq.timer == nil {
+					dq.timer = time.NewTimer(time.Duration(delay) * dq.options.unit)
+				} else {
+					stopTimer(dq.timer)
+					dq.timer.Reset(time.Duration(delay) * dq.options.unit)
+				}
+
+				select {
+				case <-dq.wakeup:
+					stopTimer(dq.timer)
+					continue
+				case <-dq.timer.C:
+					if atomic.SwapInt32(&dq.sleeping, 0) == 0 {
+						<-dq.wakeup
+					}
+					continue
+				}
+			}
+		}
+
+		break ReadLoop
+	}
+
+	if done {
+		value = dq.empty
+		expiration = -1
+	}
+
+	atomic.StoreInt32(&dq.sleeping, 0)
+	return value, expiration
 }
 
 func (dq *delayQueue[T]) Update(ele priority.Element, expiration int64) {
-	if atomic.LoadInt32(&dq.closed) == 1 {
+	dq.mu.Lock()
+	if dq.closed {
+		dq.mu.Unlock()
 		return
 	}
 
-	dq.mu.Lock()
 	dq.pq.Update(ele, expiration)
 	dq.mu.Unlock()
 
@@ -155,19 +212,21 @@ func (dq *delayQueue[T]) Update(ele priority.Element, expiration int64) {
 }
 
 func (dq *delayQueue[T]) Remove(ele priority.Element) {
-	if atomic.LoadInt32(&dq.closed) == 1 {
+	var first = false
+	if ele != nil {
+		first = ele.First()
+	}
+
+	dq.mu.Lock()
+	if dq.closed {
+		dq.mu.Unlock()
 		return
 	}
 
-	var isFirst = false
-	if ele != nil {
-		isFirst = ele.First()
-	}
-	dq.mu.Lock()
 	dq.pq.Remove(ele)
 	dq.mu.Unlock()
 
-	if isFirst {
+	if first {
 		if atomic.CompareAndSwapInt32(&dq.sleeping, 1, 0) {
 			dq.wakeup <- struct{}{}
 		}
@@ -175,14 +234,42 @@ func (dq *delayQueue[T]) Remove(ele priority.Element) {
 }
 
 func (dq *delayQueue[T]) Close() {
-	if atomic.CompareAndSwapInt32(&dq.closed, 0, 1) {
-		if atomic.LoadInt32(&dq.sleeping) == 1 {
-			dq.wakeup <- struct{}{}
+	dq.mu.Lock()
+	if dq.closed {
+		dq.mu.Unlock()
+		return
+	}
+
+	dq.closed = true
+
+	if atomic.LoadInt32(&dq.sleeping) == 1 {
+		dq.wakeup <- struct{}{}
+	}
+
+	if dq.options.drainAll {
+		var c = dq.pq.Len()
+		if c > 0 {
+			dq.w.Add(c)
 		}
-		dq.m.close(dq)
+		dq.mu.Unlock()
+
+		dq.w.Wait()
+	} else {
+		dq.mu.Unlock()
 	}
 }
 
 func (dq *delayQueue[T]) Closed() bool {
-	return atomic.LoadInt32(&dq.closed) == 1
+	dq.mu.Lock()
+	defer dq.mu.Unlock()
+	return dq.closed
+}
+
+func stopTimer(timer *time.Timer) {
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
 }

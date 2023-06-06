@@ -17,7 +17,7 @@ func BenchmarkDelayQueue_Enqueue(b *testing.B) {
 }
 
 func BenchmarkDelayQueue_EnqueueDequeue(b *testing.B) {
-	var q = delay.New[int](delay.WithReadAllMode())
+	var q = delay.New[int](delay.WithDrainAll())
 	go func() {
 		var next int64
 		for {
@@ -34,8 +34,8 @@ func BenchmarkDelayQueue_EnqueueDequeue(b *testing.B) {
 	q.Close()
 }
 
-func BenchmarkDelayQueue_DefaultModeDequeue(b *testing.B) {
-	var q = delay.New[int](delay.WithDefaultMode())
+func BenchmarkDelayQueue_Dequeue(b *testing.B) {
+	var q = delay.New[int]()
 	var now = time.Now().Unix()
 	for i := 0; i < b.N; i++ {
 		q.Enqueue(i, now)
@@ -50,8 +50,8 @@ func BenchmarkDelayQueue_DefaultModeDequeue(b *testing.B) {
 	}
 }
 
-func BenchmarkDelayQueue_ReadAllModeDequeue(b *testing.B) {
-	var q = delay.New[int](delay.WithReadAllMode())
+func BenchmarkDelayQueue_DrainAll_Dequeue(b *testing.B) {
+	var q = delay.New[int](delay.WithDrainAll())
 	var now = time.Now().Unix()
 	for i := 0; i < b.N; i++ {
 		q.Enqueue(i, now)
@@ -83,8 +83,8 @@ func BenchmarkDelayQueue_Remove(b *testing.B) {
 	}
 }
 
-func TestDelayQueue_DefaultModeClose1(t *testing.T) {
-	var q = delay.New[int](delay.WithDefaultMode())
+func TestDelayQueue_Close1(t *testing.T) {
+	var q = delay.New[int]()
 
 	go func() {
 		for {
@@ -101,7 +101,7 @@ func TestDelayQueue_DefaultModeClose1(t *testing.T) {
 	q.Enqueue(2, now+2)
 	q.Enqueue(3, now+3)
 
-	// DefaultMode： 调用 Close 方法后立即关闭队列，理想情况下不会有任何消息被消费
+	// 调用 Close 方法后立即关闭队列，理想情况下不会有任何消息被消费
 	q.Close()
 
 	// Close 方法不会阻塞，所以基本没有时间差
@@ -110,8 +110,8 @@ func TestDelayQueue_DefaultModeClose1(t *testing.T) {
 	}
 }
 
-func TestDelayQueue_ReadAllModeClose1(t *testing.T) {
-	var q = delay.New[int](delay.WithReadAllMode())
+func TestDelayQueue_DrainAll_Close1(t *testing.T) {
+	var q = delay.New[int](delay.WithDrainAll())
 
 	var done = make(chan struct{})
 	go func() {
@@ -132,7 +132,7 @@ func TestDelayQueue_ReadAllModeClose1(t *testing.T) {
 	q.Enqueue(2, now+2)
 	q.Enqueue(3, now+3)
 
-	// ReadAllMode：调用 Close 方法后会等待所有已入队的消息出队，所以所有的消息都会被消费
+	// DrainAll：调用 Close 方法后会等待所有已入队的消息出队，所以所有的消息都会被消费
 	q.Close()
 
 	select {
@@ -145,8 +145,8 @@ func TestDelayQueue_ReadAllModeClose1(t *testing.T) {
 	}
 }
 
-func TestDelayQueue_DefaultModeClose2(t *testing.T) {
-	var q = delay.New[int](delay.WithDefaultMode())
+func TestDelayQueue_Close2(t *testing.T) {
+	var q = delay.New[int]()
 
 	var now = time.Now().Unix()
 	q.Enqueue(1, now+1)
@@ -164,8 +164,8 @@ func TestDelayQueue_DefaultModeClose2(t *testing.T) {
 	}
 }
 
-func TestDelayQueue_ReadAllModeClose2(t *testing.T) {
-	var q = delay.New[int](delay.WithReadAllMode())
+func TestDelayQueue_DrainAll_Close2(t *testing.T) {
+	var q = delay.New[int](delay.WithDrainAll())
 
 	var now = time.Now().Unix()
 	q.Enqueue(1, now+1)
