@@ -39,8 +39,6 @@ func main() {
 	time.Sleep(time.Second)
 	// Close 只关闭队列，不等待存量元素出队。
 	bQueue.Close()
-	// Wait 等待存量元素全部出队。
-	bQueue.Wait()
 
 	<-done
 }
