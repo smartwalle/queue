@@ -2,37 +2,43 @@ package main
 
 import (
 	"fmt"
-	"github.com/smartwalle/queue/priority"
+
+	"github.com/smartwalle/queue/priorityqueue"
 )
 
+// task 是带优先级的任务，priority 越小优先级越高。
+type task struct {
+	name     string
+	priority int
+}
+
 func main() {
-	var pQueue = priority.New[string]()
+	// less 返回 true 表示 a 应比 b 先出队。
+	var pQueue = priorityqueue.New[task](func(a, b task) bool {
+		return a.priority < b.priority
+	})
 
-	fmt.Println("1", pQueue.Enqueue("1", 1))
-	fmt.Println("2", pQueue.Enqueue("2", 0))
-	fmt.Println("3", pQueue.Enqueue("3", 5))
-	fmt.Println("4", pQueue.Enqueue("4", 2))
-	fmt.Println("5", pQueue.Enqueue("5", 9))
-	fmt.Println("6", pQueue.Enqueue("6", 0))
-
-	for {
-		var v, p = pQueue.Dequeue()
-		if p == -1 {
-			break
+	for _, t := range []task{
+		{"1", 1},
+		{"2", 0},
+		{"3", 5},
+		{"4", 2},
+		{"5", 9},
+		{"6", 0},
+	} {
+		if err := pQueue.Enqueue(t); err != nil {
+			fmt.Println("Enqueue", t.name, err)
 		}
-		fmt.Println("Dequeue", v, p)
 	}
 
-	//var delay = int64(0)
-	//for {
-	//	var v, p, _ = pQueue.Peek(delay)
-	//	fmt.Println("Peek", v, p)
-	//	if v == nil {
-	//		if p > 0 {
-	//			delay = p
-	//			continue
-	//		}
-	//		break
-	//	}
-	//}
+	// Dequeue 在队列为空时会阻塞等待，先关闭再排空。
+	pQueue.Close()
+
+	for {
+		var t, err = pQueue.Dequeue()
+		if err != nil {
+			break
+		}
+		fmt.Println("Dequeue", t.name, t.priority)
+	}
 }
