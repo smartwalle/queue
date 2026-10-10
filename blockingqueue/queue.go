@@ -11,7 +11,6 @@ type Queue[T any] struct {
 	mu       sync.Mutex
 	notEmpty *sync.Cond
 	notFull  *sync.Cond
-	drained  *sync.Cond
 
 	max      int
 	elements []T
@@ -29,7 +28,6 @@ func New[T any](max int) *Queue[T] {
 
 	q.notEmpty = sync.NewCond(&q.mu)
 	q.notFull = sync.NewCond(&q.mu)
-	q.drained = sync.NewCond(&q.mu)
 
 	return q
 }
@@ -107,7 +105,6 @@ func (q *Queue[T]) tryDequeue() (T, error) {
 	if q.head == len(q.elements) {
 		q.elements = q.elements[:0]
 		q.head = 0
-		q.drained.Broadcast()
 	} else if q.head >= 1024 && q.head*2 >= len(q.elements) {
 		n := copy(q.elements, q.elements[q.head:])
 		clear(q.elements[n:])
@@ -131,16 +128,6 @@ func (q *Queue[T]) Close() {
 	q.closed = true
 	q.notEmpty.Broadcast()
 	q.notFull.Broadcast()
-}
-
-// Wait 等待队列中的所有元素出队。
-func (q *Queue[T]) Wait() {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-
-	for q.head < len(q.elements) {
-		q.drained.Wait()
-	}
 }
 
 // Closed 返回队列是否已关闭。
