@@ -2,30 +2,31 @@ package main
 
 import (
 	"fmt"
-	"github.com/smartwalle/queue/delay"
 	"time"
+
+	"github.com/smartwalle/queue/delayqueue"
 )
 
+// delayedMsg 是带到期时间的消息。
+type delayedMsg struct {
+	value    string
+	deadline time.Time
+}
+
 func main() {
-	var dQueue = delay.New[string](
-		delay.WithDrainAll(),
-		delay.WithTimeUnit(time.Second),
-		delay.WithTimeProvider(func() int64 {
-			return time.Now().Unix()
-		}),
-	)
+	var dQueue = delayqueue.New[delayedMsg](func(v delayedMsg) time.Time {
+		return v.deadline
+	})
 
 	var done = make(chan struct{})
 	go func() {
-		defer func() {
-			close(done)
-		}()
+		defer close(done)
 		for {
-			var v, p = dQueue.Dequeue()
-			fmt.Println("Dequeue", time.Now().Unix(), v, p)
-			if p == -1 {
+			var v, err = dQueue.Dequeue()
+			if err != nil {
 				break
 			}
+			fmt.Println("Dequeue", time.Now().Unix(), v.value)
 		}
 	}()
 
@@ -33,22 +34,22 @@ func main() {
 		var i = 1
 		for {
 			var now = time.Now()
-			dQueue.Enqueue(fmt.Sprintf("sss%d-3", i), now.Add(time.Second*3).Unix())
-			dQueue.Enqueue(fmt.Sprintf("sss%d-5", i), now.Add(time.Second*5).Unix())
-			dQueue.Enqueue(fmt.Sprintf("sss%d-1", i), now.Add(time.Second*1).Unix())
-			time.Sleep(time.Second * 1)
+			dQueue.Enqueue(delayedMsg{value: fmt.Sprintf("sss%d-3", i), deadline: now.Add(time.Second * 3)})
+			dQueue.Enqueue(delayedMsg{value: fmt.Sprintf("sss%d-5", i), deadline: now.Add(time.Second * 5)})
+			dQueue.Enqueue(delayedMsg{value: fmt.Sprintf("sss%d-1", i), deadline: now.Add(time.Second * 1)})
+			time.Sleep(time.Second)
 			i++
 		}
-
 	}()
 
 	time.Sleep(time.Second * 5)
-	dQueue.Enqueue("有效", time.Now().Unix())
-	time.Sleep(time.Second * 1)
-	dQueue.Close()
-	dQueue.Enqueue("无效", time.Now().Add(time.Second*1).Unix())
+	dQueue.Enqueue(delayedMsg{value: "有效", deadline: time.Now()})
+	time.Sleep(time.Second)
 
-	select {
-	case <-done:
-	}
+	// Close 关闭队列，不再接受新元素，已入队的元素到期后仍会取出。
+	dQueue.Close()
+	fmt.Println("Enqueue 无效 ->", dQueue.Enqueue(delayedMsg{value: "无效", deadline: time.Now()}))
+
+	<-done
+	fmt.Println("队列已排空")
 }

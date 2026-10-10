@@ -115,7 +115,7 @@ func (q *Queue[T]) tryDequeue() (T, error) {
 	return value, nil
 }
 
-// Close 关闭队列，不等待剩余元素出队。
+// Close 关闭队列。
 // 关闭后不再接受新元素，但允许取出已有元素。
 func (q *Queue[T]) Close() {
 	q.mu.Lock()
