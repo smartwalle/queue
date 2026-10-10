@@ -12,7 +12,7 @@ type Queue[T any] struct {
 	notEmpty *sync.Cond
 	notFull  *sync.Cond
 
-	max      int
+	capacity int
 	elements []T
 	head     int
 	closed   bool
@@ -20,9 +20,9 @@ type Queue[T any] struct {
 
 // New 创建阻塞队列。
 // max > 0 时为有界队列；max <= 0 时为无界队列。
-func New[T any](max int) *Queue[T] {
+func New[T any](capacity int) *Queue[T] {
 	var q = &Queue[T]{
-		max:      max,
+		capacity: capacity,
 		elements: make([]T, 0, 32),
 	}
 
@@ -46,8 +46,8 @@ func (q *Queue[T]) Enqueue(value T) error {
 	defer q.mu.Unlock()
 
 	for !q.closed &&
-		q.max > 0 &&
-		len(q.elements)-q.head >= q.max {
+		q.capacity > 0 &&
+		len(q.elements)-q.head >= q.capacity {
 		q.notFull.Wait()
 	}
 
