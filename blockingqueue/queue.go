@@ -8,8 +8,7 @@ import (
 
 // Queue 阻塞队列。
 type Queue[T any] struct {
-	mu sync.Mutex
-
+	mu       sync.Mutex
 	notEmpty *sync.Cond
 	notFull  *sync.Cond
 	drained  *sync.Cond
@@ -23,9 +22,9 @@ type Queue[T any] struct {
 // New 创建阻塞队列。
 // max > 0 时为有界队列；max <= 0 时为无界队列。
 func New[T any](max int) *Queue[T] {
-	q := &Queue[T]{
+	var q = &Queue[T]{
 		max:      max,
-		elements: make([]T, 0),
+		elements: make([]T, 0, 32),
 	}
 
 	q.notEmpty = sync.NewCond(&q.mu)
@@ -64,7 +63,18 @@ func (q *Queue[T]) Enqueue(value T) error {
 	return nil
 }
 
+// TryDequeue 尝试从队列中取出一个元素，不会阻塞。
+// 如果队列为空且已关闭，返回 queue.ErrClosed。
+// 如果队列为空且未关闭，返回 queue.ErrEmpty。
+func (q *Queue[T]) TryDequeue() (T, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	return q.tryDequeue()
+}
+
 // Dequeue 从队列中取出一个元素。
+// 队列为空时阻塞等待。
 // 队列关闭后，仍然允许取出剩余元素。
 // 队列关闭且为空时，返回 queue.ErrClosed。
 func (q *Queue[T]) Dequeue() (T, error) {
@@ -75,9 +85,17 @@ func (q *Queue[T]) Dequeue() (T, error) {
 		q.notEmpty.Wait()
 	}
 
+	return q.tryDequeue()
+}
+
+func (q *Queue[T]) tryDequeue() (T, error) {
 	var zero T
+
 	if q.head == len(q.elements) {
-		return zero, queue.ErrClosed
+		if q.closed {
+			return zero, queue.ErrClosed
+		}
+		return zero, queue.ErrEmpty
 	}
 
 	value := q.elements[q.head]
@@ -89,8 +107,6 @@ func (q *Queue[T]) Dequeue() (T, error) {
 	if q.head == len(q.elements) {
 		q.elements = q.elements[:0]
 		q.head = 0
-
-		// 队列变为空时，唤醒等待排空的 goroutine。
 		q.drained.Broadcast()
 	} else if q.head >= 1024 && q.head*2 >= len(q.elements) {
 		n := copy(q.elements, q.elements[q.head:])
