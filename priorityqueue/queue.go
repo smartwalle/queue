@@ -55,7 +55,7 @@ type Queue[T any] struct {
 // capacity > 0 时为有界队列；capacity <= 0 时为无界队列。
 // less 用于比较元素的优先级，返回 true 表示第一个元素应优先出队。
 func New[T any](capacity int, less func(T, T) bool) *Queue[T] {
-	q := &Queue[T]{
+	var q = &Queue[T]{
 		capacity: capacity,
 		elements: &priorityHeap[T]{
 			elements: make([]T, 0, max(32, capacity)),
@@ -78,7 +78,6 @@ func (q *Queue[T]) Len() int {
 }
 
 // Enqueue 添加元素到队列。
-// 有界队列满时阻塞等待空位。
 func (q *Queue[T]) Enqueue(value T) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
