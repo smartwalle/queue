@@ -23,7 +23,7 @@ type Queue[T any] struct {
 func New[T any](capacity int) *Queue[T] {
 	var q = &Queue[T]{
 		capacity: capacity,
-		elements: make([]T, 0, 32),
+		elements: make([]T, 0, max(32, capacity)),
 	}
 
 	q.notEmpty = sync.NewCond(&q.mu)
