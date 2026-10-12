@@ -39,7 +39,6 @@ func (h *delayHeap[T]) push(value delayed[T]) {
 }
 
 // pop 移除并返回截止时间最早的元素，并向下调整以维持堆的性质。
-// 调用前必须确保堆不为空。
 func (h *delayHeap[T]) pop() delayed[T] {
 	n := len(h.elements) - 1
 	h.swap(0, n)
@@ -93,24 +92,29 @@ func (h *delayHeap[T]) down(i, n int) {
 
 // Queue 延时队列。
 type Queue[T any] struct {
-	mu   sync.Mutex
-	cond *sync.Cond
+	mu       sync.Mutex
+	notEmpty *sync.Cond
+	notFull  *sync.Cond
 
+	capacity int
 	elements delayHeap[T]
 	deadline func(T) time.Time
 	closed   bool
 }
 
 // New 创建延时队列，并使用 deadline 计算每个元素的截止时间。
-func New[T any](deadline func(T) time.Time) *Queue[T] {
+// capacity > 0 时为有界队列；capacity <= 0 时为无界队列。
+func New[T any](capacity int, deadline func(T) time.Time) *Queue[T] {
 	var q = &Queue[T]{
 		elements: delayHeap[T]{
-			elements: make([]delayed[T], 0, 32),
+			elements: make([]delayed[T], 0, max(32, capacity)),
 		},
 		deadline: deadline,
+		capacity: capacity,
 	}
 
-	q.cond = sync.NewCond(&q.mu)
+	q.notEmpty = sync.NewCond(&q.mu)
+	q.notFull = sync.NewCond(&q.mu)
 
 	return q
 }
@@ -128,6 +132,10 @@ func (q *Queue[T]) Enqueue(value T) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
+	for q.capacity > 0 && q.elements.Len() >= q.capacity && !q.closed {
+		q.notFull.Wait()
+	}
+
 	if q.closed {
 		return queue.ErrClosed
 	}
@@ -136,8 +144,7 @@ func (q *Queue[T]) Enqueue(value T) error {
 		elem:     value,
 		deadline: q.deadline(value),
 	})
-
-	q.cond.Broadcast()
+	q.notEmpty.Broadcast()
 
 	return nil
 }
@@ -162,7 +169,12 @@ func (q *Queue[T]) TryDequeue() (T, error) {
 		return zero, queue.ErrEmpty
 	}
 
-	return q.elements.pop().elem, nil
+	value := q.elements.pop().elem
+	if q.capacity > 0 {
+		q.notFull.Signal()
+	}
+
+	return value, nil
 }
 
 // Dequeue 阻塞等待队首元素到期，并移除和返回该元素。
@@ -179,20 +191,26 @@ func (q *Queue[T]) Dequeue() (T, error) {
 				return zero, queue.ErrClosed
 			}
 
-			q.cond.Wait()
+			q.notEmpty.Wait()
 			continue
 		}
 
 		delay := time.Until(q.elements.elements[0].deadline)
 		if delay <= 0 {
-			return q.elements.pop().elem, nil
+			value := q.elements.pop().elem
+			if q.capacity > 0 {
+				q.notFull.Signal()
+			}
+			return value, nil
 		}
 
 		timer := time.AfterFunc(delay, func() {
-			q.cond.Broadcast()
+			q.mu.Lock()
+			q.notEmpty.Broadcast()
+			q.mu.Unlock()
 		})
 
-		q.cond.Wait()
+		q.notEmpty.Wait()
 		timer.Stop()
 	}
 }
@@ -208,7 +226,8 @@ func (q *Queue[T]) Close() {
 	}
 
 	q.closed = true
-	q.cond.Broadcast()
+	q.notEmpty.Broadcast()
+	q.notFull.Broadcast()
 }
 
 // Closed 返回队列是否已关闭。

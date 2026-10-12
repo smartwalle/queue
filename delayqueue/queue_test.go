@@ -19,7 +19,7 @@ type item struct {
 
 // newDelayQueue 按元素自带的绝对到期时间创建队列。
 func newDelayQueue() *delayqueue.Queue[item] {
-	return delayqueue.New[item](func(v item) time.Time {
+	return delayqueue.New[item](0, func(v item) time.Time {
 		return v.deadline
 	})
 }
