@@ -42,24 +42,29 @@ func (h *priorityHeap[T]) Pop() any {
 
 // Queue 优先级队列。
 type Queue[T any] struct {
-	mu   sync.Mutex
-	cond *sync.Cond
+	mu       sync.Mutex
+	notEmpty *sync.Cond
+	notFull  *sync.Cond
 
+	capacity int
 	elements *priorityHeap[T]
 	closed   bool
 }
 
 // New 创建优先级队列。
+// capacity > 0 时为有界队列；capacity <= 0 时为无界队列。
 // less 用于比较元素的优先级，返回 true 表示第一个元素应优先出队。
-func New[T any](less func(T, T) bool) *Queue[T] {
-	var q = &Queue[T]{
+func New[T any](capacity int, less func(T, T) bool) *Queue[T] {
+	q := &Queue[T]{
+		capacity: capacity,
 		elements: &priorityHeap[T]{
-			elements: make([]T, 0, 32),
+			elements: make([]T, 0, max(32, capacity)),
 			less:     less,
 		},
 	}
 
-	q.cond = sync.NewCond(&q.mu)
+	q.notEmpty = sync.NewCond(&q.mu)
+	q.notFull = sync.NewCond(&q.mu)
 
 	return q
 }
@@ -73,16 +78,21 @@ func (q *Queue[T]) Len() int {
 }
 
 // Enqueue 添加元素到队列。
+// 有界队列满时阻塞等待空位。
 func (q *Queue[T]) Enqueue(value T) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+
+	for q.capacity > 0 && q.elements.Len() >= q.capacity && !q.closed {
+		q.notFull.Wait()
+	}
 
 	if q.closed {
 		return queue.ErrClosed
 	}
 
 	heap.Push(q.elements, value)
-	q.cond.Signal()
+	q.notEmpty.Signal()
 
 	return nil
 }
@@ -106,7 +116,7 @@ func (q *Queue[T]) Dequeue() (T, error) {
 	defer q.mu.Unlock()
 
 	for q.elements.Len() == 0 && !q.closed {
-		q.cond.Wait()
+		q.notEmpty.Wait()
 	}
 
 	return q.tryDequeue()
@@ -121,7 +131,13 @@ func (q *Queue[T]) tryDequeue() (T, error) {
 		return zero, queue.ErrEmpty
 	}
 
-	return heap.Pop(q.elements).(T), nil
+	value := heap.Pop(q.elements).(T)
+
+	if q.capacity > 0 {
+		q.notFull.Signal()
+	}
+
+	return value, nil
 }
 
 // Close 关闭队列。
@@ -135,7 +151,8 @@ func (q *Queue[T]) Close() {
 	}
 
 	q.closed = true
-	q.cond.Broadcast()
+	q.notEmpty.Broadcast()
+	q.notFull.Broadcast()
 }
 
 // Closed 判断队列是否已关闭。

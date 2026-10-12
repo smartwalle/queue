@@ -15,7 +15,7 @@ import (
 
 // newPriorityQueue 按元素值比较创建队列：数值小的优先出队。
 func newPriorityQueue() *priorityqueue.Queue[int] {
-	return priorityqueue.New[int](func(a, b int) bool {
+	return priorityqueue.New[int](0, func(a, b int) bool {
 		return a < b
 	})
 }
@@ -27,7 +27,7 @@ func BenchmarkPriorityQueue_Enqueue(b *testing.B) {
 		priorities[i] = r.Int63()
 	}
 
-	var q = priorityqueue.New[int](func(a, b int) bool {
+	var q = priorityqueue.New[int](0, func(a, b int) bool {
 		return priorities[a] < priorities[b]
 	})
 
@@ -48,7 +48,7 @@ func BenchmarkPriorityQueue_Dequeue(b *testing.B) {
 		priorities[i] = r.Int63()
 	}
 
-	var q = priorityqueue.New[int](func(a, b int) bool {
+	var q = priorityqueue.New[int](0, func(a, b int) bool {
 		return priorities[a] < priorities[b]
 	})
 	for i := 0; i < b.N; i++ {
@@ -127,7 +127,7 @@ func TestPriorityQueue_Dequeue(t *testing.T) {
 func TestPriorityQueue_SamePriority(t *testing.T) {
 	// 比较函数恒为 false 时，所有元素优先级相同，出队顺序不确定，
 	// 这里只校验全部元素都能出队、一个不丢。
-	var q = priorityqueue.New[int](func(a, b int) bool {
+	var q = priorityqueue.New[int](0, func(a, b int) bool {
 		return false
 	})
 
