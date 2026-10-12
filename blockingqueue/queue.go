@@ -45,9 +45,7 @@ func (q *Queue[T]) Enqueue(value T) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	for !q.closed &&
-		q.capacity > 0 &&
-		len(q.elements)-q.head >= q.capacity {
+	for q.capacity > 0 && len(q.elements)-q.head >= q.capacity && !q.closed {
 		q.notFull.Wait()
 	}
 
