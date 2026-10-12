@@ -19,7 +19,7 @@ type Queue[T any] struct {
 }
 
 // New 创建阻塞队列。
-// max > 0 时为有界队列；max <= 0 时为无界队列。
+// capacity > 0 时为有界队列；capacity <= 0 时为无界队列。
 func New[T any](capacity int) *Queue[T] {
 	var q = &Queue[T]{
 		capacity: capacity,
